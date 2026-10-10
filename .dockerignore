@@ -1,0 +1,12 @@
+# Build context for backend/Dockerfile (context: the repo root). Allow-list: the image only
+# needs the backend crate and the backend tests its Cargo.toml lists. Everything else
+# (__ctrl__/safe keys, dist/, engine/, games/, docs) stays out of the context.
+*
+!backend/
+!tests/backend/
+# The shared project scaffold the backend depends on (std + zip).
+!engine/build/
+!engine/starter/
+!engine/addons/
+engine/build/target
+backend/target

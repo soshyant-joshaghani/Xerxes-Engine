@@ -1,0 +1,10 @@
+[application]
+name = "starter"
+# What ships: the bundles build.rs packs from assets/ (public/bundles/*.zip).
+public_dir = "public"
+
+[web.app]
+title = "Starter"
+
+[web.watcher]
+watch_path = ["src", "assets"]

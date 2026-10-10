@@ -1,0 +1,31 @@
+.vscode/*
+!.vscode/extensions.json
+.env
+.env.local
+.DS_Store
+letsencrypt/
+__pycache__/
+*.pyc
+.venv/
+__ctrl__/.run/
+__ctrl__/logs/
+# Cargo build output in any crate (a safety net; each folder also ignores its own).
+target/
+
+# Editors, logs and OS litter.
+.idea/
+*.log
+Thumbs.db
+desktop.ini
+
+
+# engine/ and games/ have their own .gitignore.
+# Release builds from `engine publish` / `game publish` / `template publish`.
+/dist/
+
+# Temporary files.
+# The folder is tracked but always empty: everything inside is ignored except .gitkeep.
+# (`__temp__/` alone would ignore the folder itself, and Git never looks inside an ignored
+# folder, so the `!` line below could not work.)
+__temp__/*
+!__temp__/.gitkeep

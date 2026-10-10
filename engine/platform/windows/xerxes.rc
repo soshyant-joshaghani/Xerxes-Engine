@@ -1,0 +1,2 @@
+// The engine app's icon on Windows: the exe in Explorer and, through winit, the window and taskbar.
+1 ICON "xerxes.ico"

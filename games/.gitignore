@@ -1,0 +1,11 @@
+# Games made with the engine (games/<name>) are their own Git repositories: never commit them
+# here. The games in __templates__/ are part of the engine and are committed: the finished
+# ones, and the Darius games, which are developed in place there together with the engine.
+/*
+!/.gitignore
+!/__templates__/
+
+# Their build output and generated bundles (public/ is built from assets/).
+/__templates__/*/target/
+/__templates__/*/dist/
+/__templates__/*/public/

@@ -1,0 +1,254 @@
+# Xerxes engine.
+#   library  `xerxes_engine`: Bevy only. Games (games/<name>, own crates and repos) implement
+#            `Scene`, draw their UI with bevy_ui and call `xerxes_engine::launch`. They depend
+#            on it with default-features = false, so a game and its exports never carry Dioxus.
+#   app      `xerxes-engine` (feature `editor`, on by default): the engine's own editor, where
+#            games will be created. Dioxus draws the editor UI over a Bevy viewport.
+#
+#   web      dx serve --platform web --port 5100   (Dioxus DOM page, Bevy canvas, panel on top)
+#   windows  cargo run                             (Bevy window, Dioxus panel drawn by Blitz on top)
+#   android  cargo apk run --example android --features android       (NativeActivity APK, same as windows)
+[package]
+name = "xerxes_engine"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "xerxes-engine"
+path = "src/main.rs"
+required-features = ["editor"]
+
+# Android: a cdylib with #[bevy_main], packaged by cargo-apk (no Gradle).
+[[example]]
+name = "android"
+path = "platform/android/main.rs"
+crate-type = ["cdylib"]
+# `android` keeps cargo test and desktop/web builds from linking this cdylib.
+required-features = ["editor", "android"]
+
+# cargo-apk: the Android package (NativeActivity, arm64 devices).
+[package.metadata.android]
+package = "dev.xerxes.engine"
+apk_name = "xerxes-engine"
+build_targets = ["aarch64-linux-android"]
+# Launcher icon: platform/android/res/mipmap-*/ic_launcher.png (replace them to change it).
+resources = "platform/android/res"
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 34
+
+[package.metadata.android.application]
+# Fullscreen: no status bar over the app (it took the touches over the editor's toolbar).
+theme = "@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"
+icon = "@mipmap/ic_launcher"
+label = "Xerxes Engine"
+
+[package.metadata.android.application.activity]
+# Either landscape direction (follows the phone when it turns over).
+orientation = "sensorLandscape"
+# Every configuration change is handled in-app: NativeActivity cannot be recreated in the
+# same process (winit: "Failed to build event loop: RecreationAttempt"). A mouse or keyboard
+# plugged in, a font or theme change would otherwise crash or hang the app.
+config_changes = "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|density|screenSize|smallestScreenSize|layoutDirection|colorMode|fontWeightAdjustment"
+
+# Tests live in the kit's shared tests/ folder, like the backend's.
+# The bridge is the editor's (Dioxus UI <-> Bevy world).
+[[test]]
+name = "bridge"
+path = "../tests/engine/bridge.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "history"
+path = "../tests/engine/history.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "keymap"
+path = "../tests/engine/keymap.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "touch"
+path = "../tests/engine/touch.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "settings_text"
+path = "../tests/engine/settings_text.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "jobs"
+path = "../tests/engine/jobs.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "table"
+path = "../tests/engine/table.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "keymap_store"
+path = "../tests/engine/keymap_store.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "layout"
+path = "../tests/engine/layout.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "assets"
+path = "../tests/engine/assets.rs"
+
+[[test]]
+name = "codec"
+path = "../tests/engine/codec.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "flow"
+path = "../tests/engine/flow.rs"
+
+[[test]]
+name = "matches"
+path = "../tests/engine/matches.rs"
+
+[[test]]
+name = "physics"
+path = "../tests/engine/physics.rs"
+
+[[test]]
+name = "store"
+path = "../tests/engine/store.rs"
+required-features = ["editor"]
+
+[[test]]
+name = "runtime"
+path = "../tests/engine/runtime.rs"
+required-features = ["editor"]
+
+[dependencies]
+# The library takes the smallest sets it compiles against; a game picks its Bevy collection.
+bevy = { version = "0.18", default-features = false, features = [
+    "std", "bevy_window", "bevy_log", "bevy_asset", "bevy_image", "bevy_ui", "bevy_text", "bevy_state",
+    # Scenes are 2D or 3D (not games): the scene defs for both are always there.
+    "bevy_mesh", "bevy_pbr", "bevy_sprite",
+] }
+# Bundles are zips, read in memory on every platform (pure Rust deflate, works on wasm).
+zip = { version = "2.4", default-features = false, features = ["deflate-flate2", "flate2"] }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# The Bevy-free rules and physics, the same code the multiplayer server runs.
+xerxes_sim = { path = "sim" }
+# Everything below is the editor's (feature `editor`); games never build it.
+futures-channel = { version = "0.3", optional = true }
+futures-util = { version = "0.3", default-features = false, optional = true }
+dioxus = { version = "0.7.10", default-features = false, features = ["minimal", "mounted", "logger"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+# The editor reads and writes the `.rs` assets (on every platform, wasm included).
+syn = { version = "2", default-features = false, features = ["full", "parsing", "printing", "clone-impls", "extra-traits"], optional = true }
+quote = { version = "1", optional = true }
+proc-macro2 = { version = "1", default-features = false, optional = true }
+prettyplease = { version = "0.2", optional = true }
+# The module names build.rs gives asset files (prefab paths ↔ files): one rule, shared.
+xerxes_build = { path = "build", optional = true }
+
+# Editor on the web: Dioxus renders to the DOM; the panel reads the game catalog same-origin.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json"], optional = true }
+web-sys = { version = "0.3", features = ["Window", "Location", "Storage", "MediaQueryList"], optional = true }
+gloo-timers = { version = "0.3", features = ["futures"], optional = true }
+
+# Editor on Windows / macOS / Linux / Android: one Bevy window (one event loop, which is all
+# NativeActivity allows). Blitz (Dioxus native's renderer) lays out and paints the same Dioxus
+# panel on the CPU into a texture that Bevy UI shows over the world. Versions follow dioxus-native 0.7.10.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dioxus-native-dom = { version = "0.7.10", default-features = false, features = ["system-fonts"], optional = true }
+blitz-dom = { version = "0.2.4", default-features = false, features = ["system_fonts"], optional = true }
+blitz-paint = { version = "0.2.1", default-features = false, optional = true }
+blitz-traits = { version = "0.2", optional = true }
+anyrender = { version = "0.6.2", optional = true }
+# Multithreaded CPU raster: the UI overlay repaints the whole window.
+anyrender_vello_cpu = { version = "0.8.1", features = ["multithreading"], optional = true }
+# Keyboard events for Blitz's text inputs (the versions blitz-traits uses).
+keyboard-types = { version = "0.7", optional = true }
+
+# Editor: build.rs packs the template games into the binary (New Project without the repo).
+[build-dependencies]
+xerxes_build = { path = "build", optional = true }
+# Editor on Windows: the exe icon (platform/windows/xerxes.rc).
+embed-resource = { version = "3", optional = true }
+
+# Editor on Windows: the window and taskbar icon from the exe's resource (winit is Bevy's).
+[target.'cfg(windows)'.dependencies]
+winit = { version = "0.30", default-features = false, optional = true }
+
+[dev-dependencies]
+syn = { version = "2", features = ["full"] }
+futures-executor = "0.3"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+
+[features]
+default = ["editor"]
+# The engine app's own Bevy setup: the `3d` collection spelled out, with Android's
+# NativeActivity instead of GameActivity (no Gradle, works with cargo-apk).
+editor = [
+    "bevy/default_app", "bevy/std", "bevy/multi_threaded", "bevy/bevy_winit", "bevy/default_font",
+    "bevy/bevy_gilrs", "bevy/webgl2", "bevy/x11", "bevy/wayland", "bevy/sysinfo_plugin",
+    "bevy/android-native-activity",
+    "bevy/3d_bevy_render", "bevy/ui_api", "bevy/ui_bevy_render", "bevy/scene", "bevy/audio", "bevy/picking",
+    "dep:futures-channel", "dep:futures-util", "dep:dioxus", "dep:serde", "dep:serde_json",
+    "dep:syn", "dep:quote", "dep:proc-macro2", "dep:prettyplease", "dep:xerxes_build",
+    "dep:reqwest", "dep:web-sys", "dep:gloo-timers",
+    "dep:dioxus-native-dom", "dep:blitz-dom", "dep:blitz-paint", "dep:blitz-traits",
+    "dep:anyrender", "dep:anyrender_vello_cpu", "dep:keyboard-types", "dep:embed-resource", "dep:winit",
+]
+# The web build: what `dx --platform web` turns on for the editor, and what a game's own `web`
+# feature turns on. Dioxus only when the editor is in.
+web = ["bevy/web", "dioxus?/web"]
+# Marker for the Android entry (the `android` example); set by the cargo apk commands.
+android = []
+
+# Profiles apply when the engine app is built from here; games carry their own.
+# Bevy is unusably slow unoptimized: optimize dependencies in dev, keep the engine debuggable.
+[profile.dev]
+opt-level = 1
+# Line tables only: readable backtraces without multi-GB debug info and PDBs.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+# Dependencies at full speed: debug assertions and overflow checks stay on for our code only
+# (in vello_cpu they made one UI repaint ~0.8 s).
+debug-assertions = false
+overflow-checks = false
+# No debug info for dependencies (Bevy): it is most of the build cache and nobody steps through it.
+debug = false
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+# With Bevy's debug info the dev wasm is over 1 GB and wasm-bindgen runs out of memory.
+debug = false
+strip = "debuginfo"
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
+# winit with real mouse input on Android (cursor, left/right/middle, wheel). Upstream 0.30 turns
+# an Android mouse into touches and drops its buttons, so RMB look, MMB pan and the wheel could
+# not work there. The patch is only in winit's Android input handler (winit/, marked
+# "Xerxes patch"); every other platform is upstream 0.30.13.
+[patch.crates-io]
+winit = { path = "winit" }

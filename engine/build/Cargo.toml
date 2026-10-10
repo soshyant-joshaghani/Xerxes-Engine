@@ -1,0 +1,12 @@
+# xerxes_build: a game's build.rs calls `xerxes_build::generate()`.
+# It turns the game's authored `assets/` into Rust modules plus a manifest, and packs the
+# external files into bundles (`public/bundles/<id>.zip`). Std + zip only: it is a
+# build-dependency, so it must not pull Bevy into the host build.
+[package]
+name = "xerxes_build"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+zip = { version = "2.4", default-features = false, features = ["deflate"] }

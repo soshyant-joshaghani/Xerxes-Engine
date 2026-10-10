@@ -1,0 +1,37 @@
+{
+  "defaults": {
+    "user": "ubuntu",
+    "port": 22,
+    "github_org": "soshyant-joshaghani",
+    "remote_projects_root": "~/projects",
+    "enabled": true,
+    "registry_mirror": "https://docker.arvancloud.ir",
+    "apt_mirror": "http://mirror.arvancloud.ir/ubuntu",
+    "dns_servers": ["178.22.122.100", "185.51.200.2"]
+  },
+  "servers": [
+    {
+      "id": "xerxes",
+      "project": "xerxes",
+      "site": "bamdad",
+      "host_file": "safe/ar-xerxes-bamdad-address.txt",
+      "key": "safe/ar-xerxes-bamdad-privatekey.pem",
+      "env_file": "safe/ar-xerxes-bamdad-env.env",
+      "git_url": "git@github.com:soshyant-joshaghani/Xerxes-Engine.git",
+      "remote_dir": "~/projects/xerxes",
+      "compose_files": ["compose.yml"],
+      "start_cmd": "bash __ctrl__/remote/start-prod.sh",
+      "stop_cmd": "bash __ctrl__/remote/stop-prod.sh",
+      "status_cmd": "docker compose -f compose.yml ps",
+      "iran_setup": true,
+      "has_acme": true,
+      "acme_path": "./letsencrypt/acme.json",
+      "app_images": [
+        "xerxes-backend:prod"
+      ],
+      "data_volumes": [
+        "xerxes_db-data"
+      ]
+    }
+  ]
+}

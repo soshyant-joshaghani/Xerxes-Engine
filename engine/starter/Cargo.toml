@@ -1,0 +1,118 @@
+# Starter, on the Xerxes engine: an empty project with one 3D scene (scenes are 2D or 3D, not games).
+#   web     dx serve --platform web --port 5100   (Bevy canvas, bevy_ui HUD)
+#   windows cargo run                             (Bevy window, bevy_ui HUD)
+#   android cargo apk run --example android --features android       (NativeActivity APK, bevy_ui HUD)
+[package]
+name = "starter"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The game's code, shared by every platform (main.rs and android.rs call game::run).
+[lib]
+name = "game"
+path = "src/lib.rs"
+
+[[bin]]
+name = "starter"
+path = "src/main.rs"
+
+# Android: a cdylib with #[bevy_main], packaged by cargo-apk (no Gradle).
+[[example]]
+name = "android"
+path = "src/android.rs"
+crate-type = ["cdylib"]
+# `android` keeps cargo test and desktop/web builds from linking this cdylib.
+required-features = ["android"]
+
+[package.metadata.android]
+package = "dev.xerxes.starter"
+apk_name = "starter"
+build_targets = ["aarch64-linux-android"]
+# Launcher icon: res/mipmap-*/ic_launcher.png (replace them to change it).
+resources = "res"
+# Only bundles ship (public/bundles/*.zip, built by build.rs from assets/).
+assets = "public"
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 34
+
+[package.metadata.android.application]
+# Fullscreen: no status bar over the app (it took the touches over the editor's toolbar).
+theme = "@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"
+icon = "@mipmap/ic_launcher"
+label = "Starter"
+
+[package.metadata.android.application.activity]
+# Either landscape direction (follows the phone when it turns over).
+orientation = "sensorLandscape"
+# Every configuration change is handled in-app: NativeActivity cannot be recreated in the
+# same process (winit: "Failed to build event loop: RecreationAttempt"). A mouse or keyboard
+# plugged in, a font or theme change would otherwise crash or hang the app.
+config_changes = "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|density|screenSize|smallestScreenSize|layoutDirection|colorMode|fontWeightAdjustment"
+
+[dependencies]
+# default-features = false: the engine's default `editor` feature is the engine app (Dioxus
+# editor UI). A game is Bevy only: its UI is bevy_ui, so the game and its exports carry no Dioxus.
+xerxes_engine = { path = "../../../engine", default-features = false }
+# The game picks its Bevy features: the `2d` and `3d` collections spelled out (scenes are 2D or
+# 3D, not games: every game renders both), so Android can use
+# NativeActivity. The engine only takes what it compiles against.
+bevy = { version = "0.18", default-features = false, features = [
+    "default_app", "std", "multi_threaded", "bevy_winit", "default_font",
+    "bevy_gilrs", "webgl2", "x11", "wayland", "sysinfo_plugin",
+    # Android: NativeActivity (cargo-apk, no Gradle) instead of GameActivity.
+    "android-native-activity",
+    # Scenes are 2D or 3D, not games: every game renders both.
+    "2d_bevy_render", "3d_bevy_render",
+    "ui_api", "ui_bevy_render", "scene", "audio", "picking",
+] }
+
+[build-dependencies]
+# assets/ → Rust modules + bundles (public/bundles/<id>.zip). Std only: no Bevy in the host build.
+xerxes_build = { path = "../../../engine/build" }
+
+[features]
+default = []
+# `dx --platform web` turns this on.
+web = ["xerxes_engine/web"]
+# Marker for the Android entry (the `android` example); set by the cargo apk commands.
+android = []
+
+# Bevy is unusably slow unoptimized: optimize dependencies in dev, keep the game debuggable.
+[profile.dev]
+opt-level = 1
+# Line tables only: readable backtraces without multi-GB debug info and PDBs.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+# No debug info for dependencies (Bevy): it is most of the build cache and nobody steps through it.
+debug = false
+# Dependencies at full speed: debug assertions and overflow checks stay on for our code only.
+debug-assertions = false
+overflow-checks = false
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+# Profiles `dx serve` uses per platform.
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+# With Bevy's debug info the dev wasm is over 1 GB and wasm-bindgen runs out of memory.
+debug = false
+strip = "debuginfo"
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
+# winit with real mouse input on Android (the engine's patched copy, engine/winit): a
+# mouse there is a mouse (buttons, wheel), not a touch. Every other platform is upstream.
+[patch.crates-io]
+winit = { path = "../../../engine/winit" }

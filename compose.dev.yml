@@ -1,0 +1,141 @@
+# Dev infrastructure — DB + Redis + Traefik (+ Adminer).
+#
+# App processes run on the host with hot reload (xerxes-ctrl.bat backend run dev):
+#   cargo run --bin api on :8000
+#   cargo run --bin worker  (full runtime — requires Redis)
+# The engine app is not part of the dev stack: xerxes-ctrl.bat engine run web
+#   (dx serve on :5100; games: xerxes-ctrl.bat game dev <name> [web | windows | android]).
+#
+# Slim runtime (no Redis / no worker):
+#   xerxes-ctrl.bat backend run dev --slim
+#
+# Traefik routes (file provider → host.docker.internal):
+#   http://api.localhost          → localhost:8000
+#   http://engine.localhost       → localhost:5100 (engine run web)
+#   http://<name>.play.localhost  → localhost:8000 (published web builds, served by the API)
+#   http://adminer.localhost      → adminer container
+# Adminer login: server `db`, port 5432, credentials from .env (not localhost:5432).
+# Traefik dashboard: http://localhost:8080
+# Host Redis: :6379
+
+name: xerxes-dev
+
+x-dev-env: &dev-env
+  env_file:
+    - .env
+
+services:
+  redis:
+    <<: *dev-env
+    image: redis:8-alpine
+    restart: "no"
+    ports:
+      - "6379:6379"
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          exec redis-server --save 60 1 --loglevel warning --requirepass "$$REDIS_PASSWORD"
+        else
+          exec redis-server --save 60 1 --loglevel warning
+        fi
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'if [ -n "$$REDIS_PASSWORD" ]; then redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG; else redis-cli ping | grep -q PONG; fi',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:18
+    restart: "no"
+    <<: *dev-env
+    ports:
+      - "5432:5432"
+    volumes:
+      # postgres:18 VOLUME is /var/lib/postgresql (not .../data); default PGDATA is .../18/docker.
+      # Mount the named volume at /var/lib/postgresql or Docker creates an empty anonymous volume.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    environment:
+      PGDATA: /var/lib/postgresql/18/docker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?Variable not set}
+      POSTGRES_USER: ${POSTGRES_USER?Variable not set}
+      POSTGRES_DB: ${POSTGRES_DB?Variable not set}
+
+  adminer:
+    image: adminer
+    restart: "no"
+    depends_on:
+      - db
+    environment:
+      ADMINER_DESIGN: pepa-linha-dark
+    networks:
+      - traefik-public
+      - default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.constraint-label=traefik-public
+      - traefik.http.services.xerxes-adminer.loadbalancer.server.port=8080
+      - traefik.http.routers.xerxes-adminer-http.rule=Host(`adminer.localhost`)
+      - traefik.http.routers.xerxes-adminer-http.entrypoints=http
+      - traefik.http.routers.xerxes-adminer-http.middlewares=https-redirect
+      - traefik.http.routers.xerxes-adminer-https.rule=Host(`adminer.localhost`)
+      - traefik.http.routers.xerxes-adminer-https.entrypoints=https
+      - traefik.http.routers.xerxes-adminer-https.tls=true
+
+  proxy:
+    image: traefik:3.6
+    restart: "no"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # The folder, not the file: a single-file bind mount never reports edits (Docker
+      # Desktop), so Traefik would keep stale routes until restarted.
+      - ./traefik:/etc/traefik/dynamic:ro
+    command:
+      - --providers.docker
+      - --providers.docker.constraints=Label(`traefik.constraint-label`, `traefik-public`)
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=traefik-public
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.http.address=:80
+      - --entrypoints.https.address=:443
+      - --accesslog
+      - --log
+      - --log.level=INFO
+      - --api
+      - --api.insecure=true
+    labels:
+      - traefik.enable=true
+      - traefik.constraint-label=traefik-public
+      - traefik.http.middlewares.https-redirect.contenttype.autodetect=false
+    networks:
+      - traefik-public
+      - default
+
+volumes:
+  db-data:
+  redis-data:
+
+networks:
+  traefik-public:
+    name: traefik-public

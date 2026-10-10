@@ -1,0 +1,21 @@
+# The Xerxes simulation core: Bevy-free rules and physics that run the same on a client (the
+# Bevy game) and on the multiplayer server. A stable path like engine/build: games and the
+# backend refer to it by relative path.
+[package]
+name = "xerxes_sim"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# enhanced-determinism: the same inputs give the same state on every platform (WASM included),
+# which replays, spectators joining from a snapshot and prediction rely on.
+rapier2d = { version = "0.36", default-features = false, features = ["dim2", "f32", "std", "block-solver", "enhanced-determinism"] }
+
+[[test]]
+name = "physics"
+path = "../../tests/sim/physics.rs"
+
+[[test]]
+name = "matches"
+path = "../../tests/sim/matches.rs"
