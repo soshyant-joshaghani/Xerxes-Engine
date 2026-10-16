@@ -1,0 +1,5 @@
+# Every cargo under games/ (templates and `game new`) puts artifacts in the engine's target
+# folder, so Bevy is built once per feature set here — not a second tree under games/.
+# xerxes-ctrl also sets CARGO_TARGET_DIR; this covers editor Play and bare `cargo run`.
+[build]
+target-dir = "../engine/target"

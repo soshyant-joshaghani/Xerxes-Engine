@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Game Mode Taxonomy — Sides × Win Condition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#11161d;
+    --panel:#171f28;
+    --panel-2:#1c2530;
+    --line:#2b3542;
+    --line-soft:#232b35;
+    --text:#e9e6dc;
+    --text-dim:#98a1ac;
+    --text-faint:#5f6a76;
+    --amber:#e0a83e;
+    --amber-dim:#8a6a2e;
+    --empty:#3a4552;
+    --empty-text:#5a6572;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#0a0d11;}
+  body{
+    font-family:'IBM Plex Sans',sans-serif;
+    color:var(--text);
+    display:flex;
+    justify-content:center;
+  }
+  .poster{
+    width:594mm;
+    min-height:465mm;
+    background:var(--bg);
+    background-image:
+      linear-gradient(var(--line-soft) 0.5px, transparent 0.5px),
+      linear-gradient(90deg, var(--line-soft) 0.5px, transparent 0.5px);
+    background-size:10mm 10mm;
+    padding:14mm 16mm;
+    display:flex;
+    flex-direction:column;
+    gap:8mm;
+    position:relative;
+  }
+
+  /* HEADER */
+  .header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    border-bottom:1.5px solid var(--amber-dim);
+    padding-bottom:5mm;
+  }
+  .title-block h1{
+    font-family:'Big Shoulders',sans-serif;
+    font-weight:800;
+    font-size:34mm;
+    line-height:0.85;
+    letter-spacing:0.5px;
+    margin:0;
+    color:var(--text);
+    text-transform:uppercase;
+  }
+  .title-block h1 span{color:var(--amber);}
+  .title-block p{
+    margin:3mm 0 0;
+    font-size:4mm;
+    color:var(--text-dim);
+    max-width:180mm;
+    line-height:1.4;
+  }
+  .axis-legend{
+    display:flex;
+    gap:8mm;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.8mm;
+    color:var(--text-dim);
+    text-align:right;
+  }
+  .axis-legend div b{color:var(--amber);display:block;font-size:3.4mm;margin-bottom:1mm;}
+
+  /* MATRIX */
+  .matrix{
+    display:grid;
+    grid-template-columns: 46mm repeat(4, 1fr);
+    grid-template-rows: 16mm repeat(4, 1fr);
+    gap:2.2mm;
+    flex:1;
+  }
+  .col-head, .row-head, .corner{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+  .corner{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.6mm;
+    color:var(--text-faint);
+    line-height:1.5;
+    padding:2mm;
+  }
+  .col-head{
+    align-items:flex-start;
+    padding:2mm 3mm;
+    border-bottom:1px solid var(--line);
+  }
+  .col-head .num{font-family:'IBM Plex Mono',monospace;font-size:3mm;color:var(--amber-dim);}
+  .col-head .name{
+    font-family:'Big Shoulders',sans-serif;
+    font-weight:700;
+    font-size:6mm;
+    text-transform:uppercase;
+    letter-spacing:0.3px;
+    color:var(--text);
+  }
+  .col-head .sub{font-size:2.7mm;color:var(--text-dim);margin-top:0.5mm;}
+
+  .row-head{
+    background:var(--panel-2);
+    border:0.5px solid var(--line);
+    border-radius:2mm;
+    padding:3mm;
+    justify-content:center;
+    align-items:flex-start;
+    gap:1.5mm;
+  }
+  .row-head .glyph{width:11mm;height:11mm;}
+  .row-head .name{
+    font-family:'Big Shoulders',sans-serif;
+    font-weight:800;
+    font-size:6.4mm;
+    text-transform:uppercase;
+    color:var(--amber);
+    letter-spacing:0.3px;
+  }
+  .row-head .sub{font-size:2.6mm;color:var(--text-dim);line-height:1.35;}
+
+  .cell{
+    background:var(--panel);
+    border:0.5px solid var(--line);
+    border-radius:2mm;
+    padding:3.2mm;
+    display:flex;
+    flex-direction:column;
+    gap:1.6mm;
+    overflow:hidden;
+  }
+  .cell .label{
+    font-family:'IBM Plex Sans',sans-serif;
+    font-weight:600;
+    font-size:3.6mm;
+    color:var(--text);
+  }
+  .cell .examples{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.7mm;
+    color:var(--amber);
+    line-height:1.5;
+  }
+  .cell .note{
+    font-size:2.7mm;
+    color:var(--text-dim);
+    line-height:1.4;
+    margin-top:auto;
+    padding-top:1mm;
+    border-top:0.5px solid var(--line-soft);
+  }
+  .cell.empty{
+    background:transparent;
+    border:0.5px dashed var(--empty);
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    gap:1mm;
+  }
+  .cell.empty .label{color:var(--empty-text);font-weight:500;font-size:3.4mm;}
+  .cell.empty .note{border:none;margin:0;padding:0;color:var(--empty-text);font-size:2.6mm;}
+  .cell.edge .label:after{
+    content:"EDGE CASE";
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.1mm;
+    color:var(--amber-dim);
+    border:0.5px solid var(--amber-dim);
+    border-radius:1mm;
+    padding:0.4mm 1.2mm;
+    margin-left:2mm;
+    letter-spacing:0.5px;
+    vertical-align:middle;
+  }
+
+  /* FOOTER NOTES */
+  .footer{
+    display:grid;
+    grid-template-columns:46mm repeat(3, 1fr);
+    grid-auto-rows:auto;
+    gap:2.2mm;
+  }
+  .footer-label{
+    display:flex;
+    align-items:center;
+    grid-row: span 4;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.6mm;
+    color:var(--text-faint);
+    line-height:1.4;
+    padding:2mm 3mm;
+  }
+  .note-card.wide{grid-column:span 3;}
+
+  /* SANITY CHECK STRIP */
+  .sanity{
+    display:grid;
+    grid-template-columns:46mm 1fr;
+    gap:2.2mm;
+  }
+  .sanity-label{
+    display:flex;
+    align-items:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.6mm;
+    color:var(--text-faint);
+    line-height:1.4;
+    padding:2mm 3mm;
+  }
+  .sanity-groups{
+    background:var(--panel);
+    border:0.5px solid var(--line);
+    border-radius:2mm;
+    padding:3mm 4mm;
+    display:flex;
+    flex-direction:column;
+    gap:2mm;
+  }
+  .sanity-row{display:flex;align-items:center;flex-wrap:wrap;gap:2mm;}
+  .sanity-row .group-tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.4mm;
+    color:var(--amber);
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    width:22mm;
+    flex-shrink:0;
+  }
+  .chip{
+    background:var(--panel-2);
+    border:0.5px solid var(--line);
+    border-radius:1.5mm;
+    padding:1.3mm 2.6mm;
+    font-size:2.6mm;
+    color:var(--text-dim);
+    display:flex;
+    align-items:baseline;
+    gap:1.6mm;
+    white-space:nowrap;
+  }
+  .chip b{color:var(--text);font-weight:500;}
+  .chip .cell-tag{color:var(--amber);font-family:'IBM Plex Mono',monospace;font-size:2.3mm;}
+  .chip.composite{
+    border-left:1mm solid var(--amber-dim);
+    white-space:normal;
+    max-width:none;
+  }
+  .note-card{
+    background:var(--panel);
+    border:0.5px solid var(--line);
+    border-left:1.2mm solid var(--amber-dim);
+    border-radius:2mm;
+    padding:3mm 3.5mm;
+    display:flex;
+    flex-direction:column;
+    gap:1.2mm;
+  }
+  .note-card .tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.4mm;
+    color:var(--amber);
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+  }
+  .note-card .title{
+    font-family:'Big Shoulders',sans-serif;
+    font-weight:700;
+    font-size:4.6mm;
+    color:var(--text);
+    text-transform:uppercase;
+  }
+  .note-card .body{
+    font-size:2.7mm;
+    color:var(--text-dim);
+    line-height:1.45;
+  }
+  .note-card .body b{color:var(--text);font-weight:500;}
+
+  @media print{
+    body{background:none;}
+    .poster{box-shadow:none;}
+    @page{size:594mm 465mm;margin:0;}
+  }
+</style>
+</head>
+<body>
+<div class="poster">
+
+  <div class="header">
+    <div class="title-block">
+      <h1>The shape<br>of <span>play</span></h1>
+      <p>A reference map of game modes by number of competing sides and how a winner is decided — abstracted away from genre, camera, or engine. Any mode in any game should slot into one cell below.</p>
+    </div>
+    <div class="axis-legend">
+      <div><b>rows · sides</b>how many independent<br>parties are competing</div>
+      <div><b>columns · win condition</b>what determines<br>who actually wins</div>
+    </div>
+  </div>
+
+  <div class="matrix">
+    <div class="corner">sides ↓<br>win cond. →<br><span style="color:var(--text-faint)">grayed cell is<br>structurally empty —<br>the mechanic can't exist there</span></div>
+
+    <div class="col-head"><span class="num">01</span><span class="name">Score</span><span class="sub">highest number wins, ranked on a board</span></div>
+    <div class="col-head"><span class="num">02</span><span class="name">Objective</span><span class="sub">pass / fail a defined goal</span></div>
+    <div class="col-head"><span class="num">03</span><span class="name">Role</span><span class="sub">distinct jobs, distinct win terms</span></div>
+    <div class="col-head"><span class="num">04</span><span class="name">Survival</span><span class="sub">endure longest, or be the last one left</span></div>
+
+    <!-- SOLO ROW -->
+    <div class="row-head">
+      <svg class="glyph" viewBox="0 0 40 40"><circle cx="20" cy="20" r="5" fill="#e0a83e"/></svg>
+      <span class="name">Solo</span>
+      <span class="sub">one player, one run</span>
+    </div>
+    <div class="cell">
+      <div class="label">Time trial / high score</div>
+      <div class="examples">Neon White · speedrun boards · aim trainers</div>
+      <div class="note">Ranked against your own and others' personal bests — no live opponent.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Challenge clear</div>
+      <div class="examples">Boss rush · escape room · puzzle gauntlet</div>
+      <div class="note">Not numerically ranked — tiered pass/fail (bronze/silver/gold) instead.</div>
+    </div>
+    <div class="cell empty">
+      <div class="label">Structurally empty</div>
+      <div class="note">A "role" only means something relative to other players. Nothing to be distinct from.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Endurance run</div>
+      <div class="examples">Vampire Survivors · Risk of Rain · solo COD Zombies</div>
+      <div class="note">No opponents needed — you're surviving the game itself. Ranked by time or wave survived.</div>
+    </div>
+
+    <!-- COOP ROW -->
+    <div class="row-head">
+      <svg class="glyph" viewBox="0 0 40 40"><circle cx="15" cy="20" r="8" fill="none" stroke="#e0a83e" stroke-width="2"/><circle cx="25" cy="20" r="8" fill="none" stroke="#e0a83e" stroke-width="2"/></svg>
+      <span class="name">Coop</span>
+      <span class="sub">2+ players, one side, shared fate</span>
+    </div>
+    <div class="cell">
+      <div class="label">Shared high score</div>
+      <div class="examples">Horde survival · loot run · combo-synergy scoring</div>
+      <div class="note">Bonus for plays that require both players together — not two solos in parallel.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Shared clear</div>
+      <div class="examples">Raid boss · heist run · timed dungeon clear</div>
+      <div class="note">Succeed or fail as one unit. Optionally ranked by clear time.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Functional split</div>
+      <div class="examples">Keep Talking and Nobody Explodes · tank/support/dps encounter · hacker+guard heist</div>
+      <div class="note">Each player sees different information and does a different job — neither can solve it alone. Cleaner proof than any combat example: zero shooting required.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Team endurance</div>
+      <div class="examples">Horde mode · zombie survival · tower defense</div>
+      <div class="note">Whole team survives or wipes together — ranked by wave reached or time held.</div>
+    </div>
+
+    <!-- DUEL ROW -->
+    <div class="row-head">
+      <svg class="glyph" viewBox="0 0 40 40"><circle cx="10" cy="20" r="4" fill="#e0a83e"/><circle cx="30" cy="20" r="4" fill="#e0a83e"/><line x1="14" y1="20" x2="26" y2="20" stroke="#e0a83e" stroke-width="1.5"/></svg>
+      <span class="name">Duel</span>
+      <span class="sub">2 sides (1 or many-a-side)</span>
+    </div>
+    <div class="cell">
+      <div class="label">Head-to-head score</div>
+      <div class="examples">Football-style scoring · Halo skull-carry · king-of-hill points</div>
+      <div class="note">Score usually comes from a contested shared mechanic, not raw kills.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Base / goal destruction</div>
+      <div class="examples">MOBA nexus (Dota, LoL) · capture the flag · payload/push</div>
+      <div class="note">You can lose the fight and still win the game — the objective is the only thing that counts.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Attacker vs. defender</div>
+      <div class="examples">Search &amp; destroy · cargo · one-life asymmetric raid</div>
+      <div class="note">Roles are usually swapped each round so both sides play both jobs — keeps it fair.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Round elimination</div>
+      <div class="examples">Counter-Strike · Valorant · Rainbow Six Siege · 1v1 sudden death</div>
+      <div class="note">No respawn within the round — win by wiping the other side or outlasting the clock.</div>
+    </div>
+
+    <!-- NGON ROW -->
+    <div class="row-head">
+      <svg class="glyph" viewBox="0 0 40 40"><polygon points="20,6 33,15 28,32 12,32 7,15" fill="none" stroke="#e0a83e" stroke-width="2"/></svg>
+      <span class="name">N-gon</span>
+      <span class="sub">3+ independent sides</span>
+    </div>
+    <div class="cell">
+      <div class="label">Multi-way race</div>
+      <div class="examples">Kart racing · season-long placement points</div>
+      <div class="note">Points scale by finishing rank, not just a binary win — 2nd place still matters.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Multi-side control</div>
+      <div class="examples">3+ team domination/control points · multi-team heist race</div>
+      <div class="note">Shared contested objective — alliances between sides can shift mid-match. Missing from your original list.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Hidden role / social deduction</div>
+      <div class="examples">Mafia · Werewolf · Among Us</div>
+      <div class="note">Each role has a different win condition and different information — the asymmetry of knowledge <b>is</b> the game.</div>
+    </div>
+    <div class="cell">
+      <div class="label">Last one standing</div>
+      <div class="examples">Battle royale · extraction royale · shrinking-zone survival</div>
+      <div class="note">Elimination is permanent for the match — no respawns, no second life.</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-label">doesn't fit<br>the grid at all ↓</div>
+
+    <div class="note-card">
+      <span class="tag">Modifier axis</span>
+      <span class="title">Symmetric vs. asymmetric</span>
+      <span class="body">Not a row — a flag on any cell. Duel Role becomes 1-vs-many when sides are uneven (<b>Dead by Daylight</b>, Predator/Juggernaut modes). Same win condition, unequal side sizes.</span>
+    </div>
+
+    <div class="note-card">
+      <span class="tag">Outside the grid</span>
+      <span class="title">Sandbox / no win condition</span>
+      <span class="body">Practice range, aim-training lobby, creative/build mode. There's no win condition to plot — every competitive game still needs a zero-stakes space like this.</span>
+    </div>
+
+    <div class="note-card">
+      <span class="tag">Parallel to sandbox</span>
+      <span class="title">Progression games</span>
+      <span class="body">Some games aren't won, they're progressed — loot, levels, gear, crafting, economy instead of a win condition. Diablo, Path of Exile, Destiny, Warframe, Monster Hunter.</span>
+    </div>
+
+    <div class="note-card">
+      <span class="tag">Meta wrapper</span>
+      <span class="title">Tournament / bracket</span>
+      <span class="body">Not a mode itself — takes any Duel or N-gon cell and repeats it across elimination rounds. Design it as a wrapper layer, not a new cell.</span>
+    </div>
+
+    <div class="note-card">
+      <span class="tag">No win condition, but authored</span>
+      <span class="title">Narrative / experience</span>
+      <span class="body">Walking sims, visual novels, story-heavy RPGs. No failure state, just forward progress through authored content. Multiple endings are a branch, not a rank — nothing to leaderboard.</span>
+    </div>
+
+    <div class="note-card">
+      <span class="tag">Not one cell — several, stacked</span>
+      <span class="title">Composite / open-world</span>
+      <span class="body">GTA-style games: Solo Objective missions + Sandbox free-roam + Progression (money, gear) + Duel/N-gon Score bolted on for online modes. Big open-world games are rarely one cell.</span>
+    </div>
+
+    <div class="note-card wide">
+      <span class="tag">Third axis, not a column</span>
+      <span class="title">Gameplay modifiers</span>
+      <span class="body">Permadeath, respawn timers, time limits, fog of war, low gravity, shrinking zone, escort, moving objective — these stack onto any cell above, they don't define new ones. "2 sides, Objective, escort payload, respawns, 15-minute limit" is just Duel Objective plus four modifiers — that's Overwatch.</span>
+    </div>
+
+    <div class="note-card wide">
+      <span class="tag">Colosseum · your persistent FFA</span>
+      <span class="title">Live session, not a match</span>
+      <span class="body">Really N-gon Score running as a 24/7 open room instead of discrete matches. Rank with pairwise <b>Glicko-2</b> rating, not raw kills — each kill is a mini 1v1 result, and the rating-deviation term caps swings until a player has enough games logged. An empty server can't be farmed into #1: killing a low-confidence opponent barely moves your rating.</span>
+    </div>
+  </div>
+
+  <div class="sanity">
+    <div class="sanity-label">cross-genre<br>sanity check ↓</div>
+    <div class="sanity-groups">
+      <div class="sanity-row">
+        <span class="group-tag">Board games</span>
+        <span class="chip"><b>Tic-tac-toe</b><span class="cell-tag">Duel · Objective</span></span>
+        <span class="chip"><b>Chess / checkers</b><span class="cell-tag">Duel · Objective</span></span>
+        <span class="chip"><b>Ludo</b><span class="cell-tag">N-gon · Objective</span></span>
+        <span class="chip"><b>Rock-paper-scissors, single throw</b><span class="cell-tag">Duel · Survival</span></span>
+        <span class="chip"><b>Rock-paper-scissors, best-of-N</b><span class="cell-tag">Duel · Score</span></span>
+        <span class="chip"><b>Mastermind</b><span class="cell-tag">Duel · Role</span></span>
+      </div>
+      <div class="sanity-row">
+        <span class="group-tag">Puzzle games</span>
+        <span class="chip"><b>Sudoku / Portal / The Witness</b><span class="cell-tag">Solo · Objective</span></span>
+        <span class="chip"><b>Tetris marathon</b><span class="cell-tag">Solo · Score</span></span>
+        <span class="chip"><b>Tetris sprint (40-line)</b><span class="cell-tag">Solo · Score</span></span>
+        <span class="chip"><b>Puyo Puyo / Tetris battle</b><span class="cell-tag">Duel · Survival</span></span>
+        <span class="chip"><b>Portal 2 co-op / It Takes Two</b><span class="cell-tag">Coop · Objective</span></span>
+        <span class="chip"><b>Keep Talking and Nobody Explodes</b><span class="cell-tag">Coop · Role</span></span>
+      </div>
+    </div>
+  </div>
+
+
+</div>
+</body>
+</html>

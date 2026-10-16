@@ -1,0 +1,13 @@
+[application]
+name = "xerxes-engine"
+
+[web.app]
+title = "Xerxes Engine"
+
+# Same-origin API in dev: /api/... on the engine page goes to the backend on :8000
+# (the game catalog and other engine services).
+[[web.proxy]]
+backend = "http://localhost:8000/api/"
+
+[web.watcher]
+watch_path = ["src"]

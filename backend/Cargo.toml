@@ -1,0 +1,74 @@
+[package]
+name = "xerxes-backend"
+version = "0.1.0"
+edition = "2021"
+publish = false
+default-run = "api"
+
+[lib]
+name = "xerxes_backend"
+path = "src/lib.rs"
+
+[[bin]]
+name = "api"
+path = "src/bin/api.rs"
+
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
+
+[[test]]
+name = "health"
+path = "../tests/backend/health.rs"
+
+[[test]]
+name = "auth"
+path = "../tests/backend/auth.rs"
+
+[[test]]
+name = "users"
+path = "../tests/backend/users.rs"
+
+[[test]]
+name = "private"
+path = "../tests/backend/private.rs"
+
+[[test]]
+name = "editor"
+path = "../tests/backend/editor.rs"
+
+[[test]]
+name = "engine"
+path = "../tests/backend/engine.rs"
+
+[[test]]
+name = "modules"
+path = "../tests/backend/modules.rs"
+
+[dependencies]
+# The shared project scaffold (New Project for the web editor), std + zip only.
+xerxes_build = { path = "../engine/build" }
+anyhow = "1"
+async-trait = "0.1"
+axum = "0.8"
+bcrypt = "0.16"
+chrono = { version = "0.4", features = ["serde"] }
+jsonwebtoken = "9"
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "derive"] }
+thiserror = "1"
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+aide = { version = "0.15", features = ["axum", "axum-json", "axum-query", "axum-form", "swagger", "scalar"] }
+schemars = { version = "0.9", features = ["uuid1", "chrono04"] }
+
+[profile.release]
+lto = "thin"
+strip = true
