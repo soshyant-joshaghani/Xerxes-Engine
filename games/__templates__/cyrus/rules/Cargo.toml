@@ -1,0 +1,10 @@
+# Siavash's rules: the Bevy-free run. Its only dependency is xerxes_sim (the shared Bevy-free tools:
+# ghosts, the room host and the offline game link the same code). Bevy never enters this crate.
+[package]
+name = "cyrus_rules"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+xerxes_sim = { path = "../../../../engine/sim" }

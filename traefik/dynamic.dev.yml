@@ -1,0 +1,79 @@
+# Dev routes to host processes.
+#   api.localhost            the Axum API (:8000)
+#   engine.localhost         the engine app's dev server (:5100: `engine run web`, or `--built`)
+#   <name>.play.localhost    published game builds, served by the API (engine dev services)
+#   game.localhost           the running game's web dev server (:5200: `game dev <x> web`, or Play
+#                            in the editor; at most one game runs at a time)
+#
+# Each route has an http router and an https twin (`tls: {}`); a router without `tls` never
+# matches TLS requests. HTTPS uses Traefik's self-signed default certificate.
+
+http:
+  routers:
+    xerxes-backend-host:
+      rule: Host(`api.localhost`)
+      entryPoints:
+        - http
+      service: xerxes-backend-host
+
+    xerxes-backend-host-tls:
+      rule: Host(`api.localhost`)
+      entryPoints:
+        - https
+      service: xerxes-backend-host
+      tls: {}
+
+    xerxes-engine-host:
+      rule: Host(`engine.localhost`)
+      entryPoints:
+        - http
+      service: xerxes-engine-host
+
+    xerxes-engine-host-tls:
+      rule: Host(`engine.localhost`)
+      entryPoints:
+        - https
+      service: xerxes-engine-host
+      tls: {}
+
+    xerxes-game-dev:
+      rule: Host(`game.localhost`)
+      entryPoints:
+        - http
+      service: xerxes-game-dev
+
+    xerxes-game-dev-tls:
+      rule: Host(`game.localhost`)
+      entryPoints:
+        - https
+      service: xerxes-game-dev
+      tls: {}
+
+    xerxes-play-host:
+      rule: HostRegexp(`^[a-z0-9-]+\.play\.localhost$`)
+      entryPoints:
+        - http
+      service: xerxes-backend-host
+
+    xerxes-play-host-tls:
+      rule: HostRegexp(`^[a-z0-9-]+\.play\.localhost$`)
+      entryPoints:
+        - https
+      service: xerxes-backend-host
+      tls: {}
+
+  services:
+    xerxes-backend-host:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:8000
+
+    xerxes-engine-host:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:5100
+
+    xerxes-game-dev:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:5200

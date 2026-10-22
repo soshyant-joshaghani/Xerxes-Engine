@@ -1,0 +1,92 @@
+# Cyrus, on the Xerxes engine: one 3D game with a small mini-game for every game mode.
+#   web     dx serve --platform web --port 5100   (Bevy canvas, bevy_ui HUD)
+#   windows cargo run                             (Bevy window, bevy_ui HUD)
+#   android cargo apk run --example android --features android       (NativeActivity APK, bevy_ui HUD)
+[package]
+name = "cyrus"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The game's code, shared by every platform (main.rs and android.rs call game::run).
+[lib]
+name = "game"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cyrus"
+path = "src/main.rs"
+
+# Android: a cdylib with #[bevy_main], packaged by cargo-apk (no Gradle).
+[[example]]
+name = "android"
+path = "src/android.rs"
+crate-type = ["cdylib"]
+# `android` keeps cargo test and desktop/web builds from linking this cdylib.
+required-features = ["android"]
+
+[package.metadata.android]
+package = "dev.xerxes.cyrus"
+apk_name = "cyrus"
+build_targets = ["aarch64-linux-android"]
+# Launcher icon: res/mipmap-*/ic_launcher.png (replace them to change it).
+resources = "res"
+# Only bundles ship (public/bundles/*.zip, built by build.rs from assets/).
+assets = "public"
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 34
+
+[package.metadata.android.application]
+# Fullscreen: no status bar over the app (it took the touches over the editor's toolbar).
+theme = "@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"
+icon = "@mipmap/ic_launcher"
+label = "Cyrus"
+
+[package.metadata.android.application.activity]
+# Either landscape direction (follows the phone when it turns over).
+orientation = "sensorLandscape"
+# Every configuration change is handled in-app: NativeActivity cannot be recreated in the
+# same process (winit: "Failed to build event loop: RecreationAttempt"). A mouse or keyboard
+# plugged in, a font or theme change would otherwise crash or hang the app.
+config_changes = "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|density|screenSize|smallestScreenSize|layoutDirection|colorMode|fontWeightAdjustment"
+
+[dependencies]
+# default-features = false: the engine's default `editor` feature is the engine app (Dioxus
+# editor UI). A game is Bevy only: its UI is bevy_ui, so the game and its exports carry no Dioxus.
+xerxes_engine = { path = "../../../engine", default-features = false }
+xerxes_sim = { path = "../../../engine/sim" }
+# Siavash's Bevy-free rules (the run), linked by the offline game and the room host alike.
+cyrus_rules = { path = "rules" }
+# The game picks its Bevy features: the `2d` and `3d` collections spelled out (scenes are 2D or
+# 3D, not games: every game renders both), so Android can use
+# NativeActivity. The engine only takes what it compiles against.
+bevy = { version = "0.18", default-features = false, features = [
+    "default_app", "std", "multi_threaded", "bevy_winit", "default_font",
+    "webgl2", "x11", "wayland", "sysinfo_plugin",
+    # Android: NativeActivity (cargo-apk, no Gradle) instead of GameActivity.
+    "android-native-activity",
+    "2d_bevy_render", "3d_bevy_render",
+    "ui_api", "ui_bevy_render", "scene", "audio", "picking",
+] }
+
+# Gamepads everywhere but Android. `bevy_gilrs` has no Android backend — it only logs
+# "Failed to start Gilrs. Gilrs does not support current platform." on every launch — and the
+# engine reads the pad there itself: buttons arrive as key events, the sticks and triggers through
+# the patched winit (`modules::input::android`).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+bevy = { version = "0.18", default-features = false, features = ["bevy_gilrs"] }
+
+[build-dependencies]
+# assets/ → Rust modules + bundles (public/bundles/<id>.zip). Std only: no Bevy in the host build.
+xerxes_build = { path = "../../../engine/build" }
+
+[features]
+default = []
+# `dx --platform web` turns this on.
+web = ["xerxes_engine/web"]
+# Marker for the Android entry (the `android` example); set by the cargo apk commands.
+android = []
+
+# Profiles and the winit patch live in games/__templates__/Cargo.toml (templates workspace).

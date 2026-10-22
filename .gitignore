@@ -1,0 +1,25 @@
+.vscode/*
+!.vscode/extensions.json
+.env
+.env.local
+.DS_Store
+letsencrypt/
+__pycache__/
+*.pyc
+.venv/
+__ctrl__/.run/
+__ctrl__/logs/
+# Cargo build output in any crate (a safety net; each folder also ignores its own).
+target/
+
+# Editors, logs and OS litter.
+.idea/
+*.log
+Thumbs.db
+desktop.ini
+
+
+# engine/ and games/ have their own .gitignore.
+# Release builds from `engine publish` / `game publish` / `template publish`.
+/dist/
+

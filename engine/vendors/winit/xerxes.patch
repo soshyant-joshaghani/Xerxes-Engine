@@ -1,0 +1,225 @@
+diff --git a/src/platform/android.rs b/src/platform/android.rs
+index b76159c..b426c89 100644
+--- a/src/platform/android.rs
++++ b/src/platform/android.rs
+@@ -117,6 +117,14 @@ impl ActiveEventLoopExtAndroid for ActiveEventLoop {
+ }
+ 
+ /// Additional methods on [`WindowAttributes`] that are specific to Android.
++/// Xerxes patch: the latest analog axes of a connected gamepad, which upstream winit would
++/// report as touches: `[left X, left Y, right X, right Y, left trigger, right trigger, hat X,
++/// hat Y]`, sticks and hat -1 to 1 (Android's y is down), triggers 0 to 1. Buttons and the
++/// D-pad also arrive as ordinary key events.
++pub fn gamepad_axes() -> [f32; 8] {
++    crate::platform_impl::gamepad_axes()
++}
++
+ pub trait WindowAttributesExtAndroid {}
+ 
+ impl WindowAttributesExtAndroid for WindowAttributes {}
+diff --git a/src/platform_impl/android/mod.rs b/src/platform_impl/android/mod.rs
+index c6a7416..af3d7aa 100644
+--- a/src/platform_impl/android/mod.rs
++++ b/src/platform_impl/android/mod.rs
+@@ -6,11 +6,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::sync::{mpsc, Arc, Mutex};
+ use std::time::{Duration, Instant};
+ 
+-use android_activity::input::{InputEvent, KeyAction, Keycode, MotionAction};
++use android_activity::input::{Axis, InputEvent, KeyAction, Keycode, MotionAction, Source};
+ use android_activity::{
+     AndroidApp, AndroidAppWaker, ConfigurationRef, InputStatus, MainEvent, Rect,
+ };
+-use tracing::{debug, trace, warn};
++use tracing::{debug, info, trace, warn};
+ 
+ use crate::cursor::Cursor;
+ use crate::dpi::{PhysicalPosition, PhysicalSize, Position, Size};
+@@ -128,6 +128,15 @@ impl RedrawRequester {
+     }
+ }
+ 
++/// Xerxes patch: the latest gamepad axes, in the order X, Y (left stick), Z, Rz (right stick),
++/// left trigger, right trigger, hat X, hat Y (D-pad), each -1 to 1 (triggers 0 to 1).
++static GAMEPAD_AXES: Mutex<[f32; 8]> = Mutex::new([0.0; 8]);
++
++/// Xerxes patch: see `platform::android::gamepad_axes`.
++pub fn gamepad_axes() -> [f32; 8] {
++    *GAMEPAD_AXES.lock().unwrap()
++}
++
+ #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+ pub struct KeyEventExtra {}
+ 
+@@ -143,6 +152,15 @@ pub struct EventLoop<T: 'static> {
+     cause: StartCause,
+     ignore_volume_keys: bool,
+     combining_accent: Option<char>,
++    /// Xerxes patch: the mouse buttons held (Android button bits: 1 primary, 2 secondary,
++    /// 4 tertiary, 8 back, 16 forward), to report presses and releases.
++    mouse_buttons: u32,
++    /// Xerxes patch: a mouse `DOWN` came without its button; the next `BUTTON_PRESS` names it,
++    /// else it was the primary button.
++    mouse_pending_primary: bool,
++    /// Xerxes patch: the mouse's last position, for its motion (`DeviceEvent::MouseMotion`,
++    /// which RMB-look and camera drags read; Android has no raw mouse motion).
++    mouse_last: Option<PhysicalPosition<f64>>,
+ }
+ 
+ #[derive(Debug, Clone, PartialEq)]
+@@ -192,6 +210,9 @@ impl<T: 'static> EventLoop<T> {
+             cause: StartCause::Init,
+             ignore_volume_keys: attributes.ignore_volume_keys,
+             combining_accent: None,
++            mouse_buttons: 0,
++            mouse_pending_primary: false,
++            mouse_last: None,
+         })
+     }
+ 
+@@ -373,6 +394,145 @@ impl<T: 'static> EventLoop<T> {
+     {
+         let mut input_status = InputStatus::Handled;
+         match event {
++            // Xerxes patch: a gamepad's analog axes. Upstream turns any `Move` motion event into a
++            // touch, so a stick would drag a phantom finger across the screen. They are kept in
++            // `GAMEPAD_AXES` instead, which `platform::android::gamepad_axes()` hands to the app
++            // (buttons and the D-pad already arrive as key events).
++            InputEvent::MotionEvent(motion_event) if motion_event.source().is_joystick_class() => {
++                let pointer = motion_event.pointer_at_index(0);
++                let mut axes = GAMEPAD_AXES.lock().unwrap();
++                *axes = [
++                    pointer.axis_value(Axis::X),
++                    pointer.axis_value(Axis::Y),
++                    pointer.axis_value(Axis::Z),
++                    pointer.axis_value(Axis::Rz),
++                    pointer.axis_value(Axis::Ltrigger),
++                    pointer.axis_value(Axis::Rtrigger),
++                    pointer.axis_value(Axis::HatX),
++                    pointer.axis_value(Axis::HatY),
++                ];
++            },
++            // Xerxes patch: a mouse is a mouse (cursor, buttons, wheel), not a touch. Upstream
++            // winit 0.30 turns every Android motion event into a touch and drops hover, the
++            // button and the wheel ("TODO mouse events").
++            InputEvent::MotionEvent(motion_event)
++                if motion_event.source() == Source::Mouse =>
++            {
++                let window_id = window::WindowId(WindowId);
++                let device_id = event::DeviceId(DeviceId(motion_event.device_id()));
++                let pointer = motion_event.pointer_at_index(0);
++                let position = PhysicalPosition { x: pointer.x() as f64, y: pointer.y() as f64 };
++                const PRIMARY: u32 = 1;
++                const BUTTONS: u32 = 0x1f;
++                let action = motion_event.action();
++                let state = motion_event.button_state().0 & BUTTONS;
++                let action_button = u32::from(motion_event.action_button()) & BUTTONS;
++
++                // Which buttons are held after this event. Android reports a press as `DOWN`
++                // (button state, sometimes empty) and `BUTTON_PRESS` (the button itself).
++                let before = self.mouse_buttons;
++                let mut held = before;
++                match action {
++                    MotionAction::ButtonPress => {
++                        self.mouse_pending_primary = false;
++                        held |= if action_button != 0 { action_button } else { state };
++                    },
++                    MotionAction::ButtonRelease => {
++                        held &= !(if action_button != 0 { action_button } else { held & !state });
++                    },
++                    MotionAction::Down => {
++                        if state != 0 {
++                            held = state;
++                        } else {
++                            self.mouse_pending_primary = true;
++                        }
++                    },
++                    MotionAction::Up | MotionAction::Cancel => {
++                        if self.mouse_pending_primary {
++                            // A click with no button named: press it now so the release is seen.
++                            held |= PRIMARY;
++                        }
++                    },
++                    _ => {
++                        if self.mouse_pending_primary {
++                            self.mouse_pending_primary = false;
++                            held |= PRIMARY;
++                        }
++                        if action == MotionAction::Move && state != 0 {
++                            held = state;
++                        }
++                    },
++                }
++
++                let mut events = Vec::new();
++                match action {
++                    MotionAction::HoverExit => {
++                        events.push(event::WindowEvent::CursorLeft { device_id })
++                    },
++                    MotionAction::HoverEnter => {
++                        events.push(event::WindowEvent::CursorEntered { device_id });
++                        events.push(event::WindowEvent::CursorMoved { device_id, position });
++                    },
++                    MotionAction::Scroll => {
++                        events.push(event::WindowEvent::CursorMoved { device_id, position });
++                        let (x, y) =
++                            (pointer.axis_value(Axis::Hscroll), pointer.axis_value(Axis::Vscroll));
++                        events.push(event::WindowEvent::MouseWheel {
++                            device_id,
++                            delta: event::MouseScrollDelta::LineDelta(x, y),
++                            phase: event::TouchPhase::Moved,
++                        });
++                    },
++                    _ => events.push(event::WindowEvent::CursorMoved { device_id, position }),
++                }
++                let buttons = [
++                    (1u32, event::MouseButton::Left),
++                    (2, event::MouseButton::Right),
++                    (4, event::MouseButton::Middle),
++                    (8, event::MouseButton::Back),
++                    (16, event::MouseButton::Forward),
++                ];
++                let press = |held: u32, before: u32, events: &mut Vec<_>| {
++                    for (bit, button) in buttons {
++                        if (held ^ before) & bit != 0 {
++                            let state = if held & bit != 0 {
++                                event::ElementState::Pressed
++                            } else {
++                                event::ElementState::Released
++                            };
++                            info!("Xerxes patch: mouse {button:?} {state:?} ({action:?})");
++                            events.push(event::WindowEvent::MouseInput { device_id, state, button });
++                        }
++                    }
++                };
++                press(held, before, &mut events);
++                if matches!(action, MotionAction::Up | MotionAction::Cancel) {
++                    // The last button is up: release everything still held.
++                    self.mouse_pending_primary = false;
++                    press(0, held, &mut events);
++                    held = 0;
++                }
++                self.mouse_buttons = held;
++                // The motion since the last mouse event (none across leaving the window).
++                let motion = match (action, self.mouse_last) {
++                    (MotionAction::HoverExit, _) => None,
++                    (_, Some(last)) => Some((position.x - last.x, position.y - last.y)),
++                    (_, None) => None,
++                };
++                self.mouse_last = (action != MotionAction::HoverExit).then_some(position);
++                if let Some(delta) = motion.filter(|(x, y)| *x != 0.0 || *y != 0.0) {
++                    callback(
++                        event::Event::DeviceEvent {
++                            device_id,
++                            event: event::DeviceEvent::MouseMotion { delta },
++                        },
++                        self.window_target(),
++                    );
++                }
++                for event in events {
++                    callback(event::Event::WindowEvent { window_id, event }, self.window_target());
++                }
++            },
+             InputEvent::MotionEvent(motion_event) => {
+                 let window_id = window::WindowId(WindowId);
+                 let device_id = event::DeviceId(DeviceId(motion_event.device_id()));

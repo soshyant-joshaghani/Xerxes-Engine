@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fullscreen (no status bar), and draw into the display cutout so a phone with a camera
+         notch does not letterbox the game with a black band beside it. -->
+    <style name="Theme.Xerxes" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

@@ -1,0 +1,38 @@
+# Workspace for the committed template games only (darius, cyrus, …).
+# User games from `game new` live in games/<name>/ — outside this workspace — so they never
+# rewrite this file. They still share build artifacts via games/.cargo/config.toml → engine/target.
+[workspace]
+resolver = "2"
+members = ["*/", "cyrus/rules"]
+
+# Bevy is unusably slow unoptimized: optimize dependencies in dev, keep each game debuggable.
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+debug = false
+strip = "debuginfo"
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
+[patch.crates-io]
+winit = { path = "../../engine/vendors/winit" }
+# A failed web audio call costs the sound, not the page (engine/vendors/cpal/XERXES.md).
+cpal = { path = "../../engine/vendors/cpal" }

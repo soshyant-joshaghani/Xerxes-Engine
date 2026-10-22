@@ -1,0 +1,16 @@
+# Games made with the engine (games/<name>) are their own Git repositories: never commit them
+# here. The games in __templates__/ are part of the engine and are committed: the finished
+# ones, and the Darius games, which are developed in place there together with the engine.
+# The templates workspace (Cargo.toml + Cargo.lock under __templates__/) is committed.
+# .cargo/config.toml is committed so every game shares engine/target.
+/*
+!/.gitignore
+!/.cargo/
+!/.cargo/**
+!/__templates__/
+
+# Their build output and generated bundles (public/ is built from assets/).
+/__templates__/*/target/
+/__templates__/*/dist/
+/__templates__/*/public/
+/__templates__/*/Cargo.lock

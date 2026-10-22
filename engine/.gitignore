@@ -1,0 +1,6 @@
+# Engine build output (the engine app and build share engine/target
+# through CARGO_TARGET_DIR, but each can also build on its own).
+/target/
+/build/target/
+# The patched winit, built on its own.
+/winit/target/

@@ -1,0 +1,127 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index c0f3ddb..3a31469 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -52,6 +52,7 @@ features = [
+     "AudioDestinationNode",
+     "Window",
+     "AudioContextState",
++    "console",
+ ]
+ 
+ [target."cfg(any(target_os = \"linux\", target_os = \"dragonfly\", target_os = \"freebsd\", target_os = \"netbsd\"))".dependencies.alsa]
+@@ -104,6 +105,7 @@ features = [
+     "AudioDestinationNode",
+     "Window",
+     "AudioContextState",
++    "console",
+ ]
+ 
+ [target."cfg(target_os = \"ios\")".dependencies.coreaudio-rs]
+diff --git a/src/host/webaudio/mod.rs b/src/host/webaudio/mod.rs
+index dc9c0d9..1ecb3d0 100644
+--- a/src/host/webaudio/mod.rs
++++ b/src/host/webaudio/mod.rs
+@@ -329,11 +329,13 @@ impl DeviceTrait for Device {
+ 
+                         #[cfg(not(target_feature = "atomics"))]
+                         {
+-                            ctx_buffer
++                            // Xerxes patch: give up on the sound, not on the page (XERXES.md).
++                            if let Err(err) = ctx_buffer
+                                 .copy_to_channel(&mut temporary_channel_buffer, channel as i32)
+-                                .expect(
+-                                    "Unable to write sample data into the audio context buffer",
+-                                );
++                            {
++                                xerxes_audio_gave_up("write sample data into the buffer", &err);
++                                return;
++                            }
+                         }
+ 
+                         // copyToChannel cannot be directly copied into from a SharedArrayBuffer,
+@@ -344,26 +346,32 @@ impl DeviceTrait for Device {
+                         #[cfg(target_feature = "atomics")]
+                         {
+                             temporary_channel_array_view.copy_from(&mut temporary_channel_buffer);
+-                            ctx_buffer
++                            // Xerxes patch: give up on the sound, not on the page (XERXES.md).
++                            if let Err(err) = ctx_buffer
+                                 .unchecked_ref::<ExternalArrayAudioBuffer>()
+                                 .copy_to_channel(&temporary_channel_array_view, channel as i32)
+-                                .expect(
+-                                    "Unable to write sample data into the audio context buffer",
+-                                );
++                            {
++                                xerxes_audio_gave_up("write sample data into the buffer", &err);
++                                return;
++                            }
+                         }
+                     }
+ 
+                     // Create an AudioBufferSourceNode, schedule it to playback the reused buffer
+                     // in the future.
+-                    let source = ctx_handle
+-                        .create_buffer_source()
+-                        .expect("Unable to create a webaudio buffer source");
++                    // Xerxes patch: give up on the sound, not on the page (XERXES.md).
++                    let source = match ctx_handle.create_buffer_source() {
++                        Ok(source) => source,
++                        Err(err) => {
++                            xerxes_audio_gave_up("create a buffer source", &err);
++                            return;
++                        }
++                    };
+                     source.set_buffer(Some(&ctx_buffer));
+-                    source
+-                        .connect_with_audio_node(&ctx_handle.destination())
+-                        .expect(
+-                        "Unable to connect the web audio buffer source to the context destination",
+-                    );
++                    if let Err(err) = source.connect_with_audio_node(&ctx_handle.destination()) {
++                        xerxes_audio_gave_up("connect the buffer source to the destination", &err);
++                        return;
++                    }
+                     source.set_onended(Some(
+                         on_ended_closure_handle
+                             .read()
+@@ -526,3 +534,25 @@ extern "C" {
+         channel_number: i32,
+     ) -> Result<(), JsValue>;
+ }
++
++/// **Xerxes patch.** The web audio callback runs for as long as the page does, and every call it
++/// makes into the browser can fail: a context the browser closed or never allowed to start, a
++/// buffer it will not take. Upstream `.expect()`s those. A panic in wasm cannot be caught and
++/// poisons the instance, so one failed write there ends the **whole game**, not just its sound â€”
++/// a black page with `RuntimeError: unreachable`.
++///
++/// Here the first failure is reported to the console and the callback returns: no more sound from
++/// this stream, and the game plays on. See `engine/cpal/XERXES.md`.
++fn xerxes_audio_gave_up(what: &str, err: &wasm_bindgen::JsValue) {
++    use std::sync::atomic::{AtomicBool, Ordering};
++
++    static REPORTED: AtomicBool = AtomicBool::new(false);
++    if !REPORTED.swap(true, Ordering::Relaxed) {
++        web_sys::console::warn_2(
++            &wasm_bindgen::JsValue::from_str(&format!(
++                "cpal (Xerxes patch): could not {what}; this page is silent from here on"
++            )),
++            err,
++        );
++    }
++}
+diff --git a/src/lib.rs b/src/lib.rs
+index 74405a4..1140ff8 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,3 +1,9 @@
++// Xerxes patch: this copy is built from a path, so upstream's own warnings (a renamed
++// web-sys setter, an elided lifetime in the wasapi backend) would show in every build of
++// every game. The patch itself is in src/host/webaudio/mod.rs, marked `Xerxes patch`;
++// see engine/vendors/cpal/XERXES.md.
++#![allow(deprecated, mismatched_lifetime_syntaxes)]
++
+ //! # How to use cpal
+ //!
+ //! Here are some concepts cpal exposes:
