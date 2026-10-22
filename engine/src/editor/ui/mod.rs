@@ -120,6 +120,9 @@ pub struct Editor {
     pub folder: Signal<String>,
     /// The open document's file: a `*.scene.rs` or, in prefab mode, a `*.prefab.rs`.
     pub scene_path: Signal<Option<String>>,
+    /// Bumped by every project or scene open. A read that finishes after a newer open has
+    /// started is stale and is dropped, so an old file can never replace the open document.
+    pub load_generation: Signal<u64>,
     /// The open document. A prefab is held as a scene of one object (its root), so the Outliner,
     /// the Properties, the Scene view, the gizmos and Undo work on it unchanged.
     pub scene: Signal<Option<SceneDoc>>,
@@ -293,6 +296,7 @@ fn EditorRoot(port: Port) -> Element {
         files: Signal::new(Vec::new()),
         folder: Signal::new(String::new()),
         scene_path: Signal::new(None),
+        load_generation: Signal::new(0),
         scene: Signal::new(None),
         scene_src: Signal::new(None),
         dirty: Signal::new(false),
@@ -393,6 +397,7 @@ fn EditorRoot(port: Port) -> Element {
         ) else {
             return;
         };
+        let generation = next_load(editor);
         spawn(async move {
             let (mut scene, mut scene_src, mut dirty, mut selected) = (
                 editor.scene,
@@ -409,6 +414,10 @@ fn EditorRoot(port: Port) -> Element {
                 };
                 doc.map(|doc| (src, doc))
             });
+            // A newer open started while this one was reading: its result is stale.
+            if *editor.load_generation.peek() != generation {
+                return;
+            }
             match loaded {
                 Ok((src, doc)) => {
                     selected.set(None);
@@ -815,6 +824,14 @@ fn leaving_is_safe(editor: Editor) -> bool {
 
 /// Loads a project: its file list, every prefab (parsed), every image (sent to the Scene
 /// view), then opens its first scene.
+/// Starts a new document load and returns its generation (see `Editor::load_generation`).
+fn next_load(editor: Editor) -> u64 {
+    let mut generation = editor.load_generation;
+    let next = *generation.peek() + 1;
+    generation.set(next);
+    next
+}
+
 async fn open_project(editor: Editor, port: Port, project: ProjectEntry) {
     let files = match store::files(&project).await {
         Ok(files) => files,
@@ -866,6 +883,8 @@ async fn open_project(editor: Editor, port: Port, project: ProjectEntry) {
     files_signal.set(files);
     prefabs_signal.set(prefabs);
     folder.set(String::new());
+    // Any scene read still in flight belongs to the project being left.
+    next_load(editor);
     scene.set(None);
     scene_path.set(first_scene);
     editor.info(format!("project {} ({})", project.title, project.location));

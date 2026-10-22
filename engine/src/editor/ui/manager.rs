@@ -15,6 +15,13 @@ struct TemplatePick(Signal<Option<String>>);
 
 /// Opens a project in the editor.
 pub fn open(editor: Editor, project: ProjectEntry) {
+    if project.packed {
+        editor.error(format!(
+            "`{}` is a template game: make a project from it (Use as template), then open that",
+            project.name
+        ));
+        return;
+    }
     let (mut open, mut screen) = (editor.project, editor.screen);
     open.set(Some(project));
     screen.set(Screen::Editor);

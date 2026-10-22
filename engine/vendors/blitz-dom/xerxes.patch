@@ -1,0 +1,117 @@
+diff --git a/src/document.rs b/src/document.rs
+index 5733d4c..dab544c 100644
+--- a/src/document.rs
++++ b/src/document.rs
+@@ -114,6 +114,9 @@ pub struct BaseDocument {
+     /// We pin the tree to a guarantee to the nodes it creates that the tree is stable in memory.
+     /// There is no way to create the tree - publicly or privately - that would invalidate that invariant.
+     pub(crate) nodes: Box<Slab<Node>>,
++    /// Xerxes patch: ids of nodes freed since the embedder last looked (a freed id is reused by the
++    /// next node created, so an embedder that keeps ids must forget them). Drained by the embedder.
++    pub freed_nodes: Vec<usize>,
+ 
+     // Stylo
+     /// The Stylo engine
+@@ -257,6 +260,7 @@ impl BaseDocument {
+             id,
+             guard,
+             nodes,
++            freed_nodes: Vec::new(),
+             stylist,
+             animations: DocumentAnimationSet::default(),
+             snapshots,
+diff --git a/src/events/mouse.rs b/src/events/mouse.rs
+index 53bff74..a9bf010 100644
+--- a/src/events/mouse.rs
++++ b/src/events/mouse.rs
+@@ -113,14 +113,14 @@ pub(crate) fn handle_mouseup<F: FnMut(DomEvent)>(
+         return;
+     }
+ 
+-    // Determine whether to dispatch a click event
+-    let do_click = true;
+-    // let do_click = doc.mouse_down_node.is_some_and(|mouse_down_id| {
+-    //     // Anonymous node ids are unstable due to tree reconstruction. So we compare the id
+-    //     // of the first non-anonymous ancestor.
+-    //     mouse_down_id == target
+-    //         || doc.non_anon_ancestor_if_anon(mouse_down_id) == doc.non_anon_ancestor_if_anon(target)
+-    // });
++    // Xerxes patch: a click is the press and the release on the same element. Upstream disabled
++    // this check, so a finger that scrolled a list and lifted over a button clicked the button.
++    let do_click = doc.mousedown_node_id.is_some_and(|mouse_down_id| {
++        // Anonymous node ids are unstable due to tree reconstruction. So we compare the id
++        // of the first non-anonymous ancestor.
++        mouse_down_id == target
++            || doc.non_anon_ancestor_if_anon(mouse_down_id) == doc.non_anon_ancestor_if_anon(target)
++    });
+ 
+     // Dispatch a click event
+     if do_click && event.button == MouseEventButton::Main {
+diff --git a/src/mutator.rs b/src/mutator.rs
+index fbd9359..0a993d7 100644
+--- a/src/mutator.rs
++++ b/src/mutator.rs
+@@ -337,6 +337,9 @@ impl DocumentMutator<'_> {
+ 
+     fn remove_node_ignoring_parent(&mut self, node_id: usize) -> Option<Node> {
+         let mut node = self.doc.nodes.try_remove(node_id);
++        if node.is_some() {
++            self.doc.freed_nodes.push(node_id);
++        }
+         if let Some(node) = &mut node {
+             for &child in &node.children {
+                 self.remove_node_ignoring_parent(child);
+@@ -406,12 +409,25 @@ impl DocumentMutator<'_> {
+     }
+ 
+     pub fn insert_nodes_before(&mut self, anchor_node_id: usize, new_node_ids: &[usize]) {
+-        let parent_id = self.doc.nodes[anchor_node_id].parent.unwrap();
++        // Xerxes patch: an anchor its parent no longer lists (the tree went out of step with
++        // Dioxus) used to panic here and take the whole editor down. The new nodes are kept
++        // instead, at the end of that parent, and the mismatch is logged.
++        let Some(parent_id) = self.doc.nodes[anchor_node_id].parent else {
++            eprintln!("blitz-dom: insert before node {anchor_node_id}, which has no parent; skipped");
++            return;
++        };
+         self.add_children_to_parent(parent_id, new_node_ids, &|parent, child_ids| {
+-            let node_child_idx = parent.index_of_child(anchor_node_id).unwrap();
+-            parent
+-                .children
+-                .splice(node_child_idx..node_child_idx, child_ids.iter().copied());
++            match parent.index_of_child(anchor_node_id) {
++                Some(node_child_idx) => {
++                    parent
++                        .children
++                        .splice(node_child_idx..node_child_idx, child_ids.iter().copied());
++                }
++                None => {
++                    eprintln!("blitz-dom: anchor {anchor_node_id} is not in its parent; appended instead");
++                    parent.children.extend_from_slice(child_ids);
++                }
++            }
+         });
+     }
+ 
+@@ -432,6 +448,11 @@ impl DocumentMutator<'_> {
+             }
+         }
+ 
++        // Xerxes patch: a child already in this parent (Dioxus moving a keyed row within its list)
++        // must leave its old slot first. Otherwise it is listed twice, and the loop below removes
++        // every entry of it from the old parent, which is this one: the child then has a parent
++        // that no longer lists it, and the next insert before it misses its anchor.
++        new_parent.children.retain(|id| !child_ids.contains(id));
+         insert_children_fn(new_parent, child_ids);
+ 
+         for child_id in child_ids.iter().copied() {
+@@ -443,7 +464,9 @@ impl DocumentMutator<'_> {
+                 self.process_added_subtree(child_id);
+             }
+ 
+-            if let Some(old_parent_id) = old_parent_id {
++            // Xerxes patch: a child that was already in this parent is not removed from it here,
++            // or the entry just inserted above would go too.
++            if let Some(old_parent_id) = old_parent_id.filter(|&id| id != parent_id) {
+                 let old_parent = &mut self.doc.nodes[old_parent_id];
+                 old_parent.insert_damage(ALL_DAMAGE);
+ 

@@ -284,9 +284,16 @@ fn drive_overlay(
     }
 }
 
+/// The share of the window's pixels the UI is painted at (1.0 = full resolution).
+const OVERLAY_RENDER_SCALE: f32 = 0.5;
+
 impl Overlay {
-    /// Lays the document out for the window's current physical size and scale.
-    fn fit(&mut self, size: UVec2, scale: f32) {
+    /// Lays the document out for the window's current physical size and scale. The UI is painted
+    /// at `OVERLAY_RENDER_SCALE` of the window's pixels (the software renderer's cost is per pixel)
+    /// and shown stretched over the window: the same CSS layout, fewer pixels to paint.
+    fn fit(&mut self, window: UVec2, window_scale: f32) {
+        let size = (window.as_vec2() * OVERLAY_RENDER_SCALE).round().as_uvec2();
+        let scale = window_scale * OVERLAY_RENDER_SCALE;
         if (size == self.size && scale == self.scale) || size.min_element() == 0 {
             return;
         }
@@ -330,12 +337,13 @@ impl Overlay {
         self.dirty = true;
     }
 
+    /// Scrolls the scrollable box under the pointer. The page itself never scrolls: the layout is
+    /// fixed to the window, so a drag over a panel would otherwise pan the whole editor out of view.
     fn scroll(&mut self, x: f64, y: f64) {
-        let changed = match self.doc.get_hover_node_id() {
-            Some(node) => self.doc.scroll_node_by_has_changed(node, x, y),
-            None => self.doc.scroll_viewport_by_has_changed(x, y),
-        };
-        self.dirty |= changed;
+        if let Some(node) = self.doc.get_hover_node_id() {
+            let changed = self.doc.scroll_node_by_has_changed(node, x, y);
+            self.dirty |= changed;
+        }
     }
 
     fn key(&mut self, input: &KeyboardInput, held: &ButtonInput<KeyCode>) {
@@ -406,7 +414,9 @@ impl Overlay {
             .is_some_and(|el| matches!(el.name.local.as_ref(), "input" | "textarea"))
     }
 
-    /// The first finger acts as the left mouse button (Android); other fingers are ignored.
+    /// The first finger acts as the left mouse button (Android); other fingers are ignored. The
+    /// press goes down at once, so pressing controls and dragging dividers work; a drag scrolls
+    /// what is under the finger, and a release off the element it went down on is no click.
     fn touch(&mut self, touch: &TouchInput) {
         match touch.phase {
             TouchPhase::Started if self.touch.is_none() => {

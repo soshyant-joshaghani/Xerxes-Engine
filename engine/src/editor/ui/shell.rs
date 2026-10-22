@@ -178,33 +178,29 @@ fn Capture(mode: Mode, solved: Solved, pointer: Signal<(f32, f32)>, x: f32, y: f
     };
 
     let up_mode = mode.clone();
-    let on_up = move |_: Event<MouseData>| {
-        let Mode::Resize { path, start, moved } = &up_mode else {
-            return;
-        };
+    let (pick_mode, pick_solved) = (mode.clone(), solved.clone());
+    let on_up = move |e: Event<MouseData>| {
         let mut mode = editor.mode;
-        mode.set(None);
-        // A click on an edge opens its menu (the way to it without a right button).
-        if !*moved {
-            let mut edge_menu = editor.edge_menu;
-            edge_menu.set(Some(EdgeMenu {
-                path: path.clone(),
-                at: *start,
-            }));
-        }
-    };
-
-    let (down_mode, down_solved) = (mode.clone(), solved.clone());
-    let on_down = move |e: Event<MouseData>| {
-        let mut mode = editor.mode;
-        // The right button cancels a pick.
-        if e.trigger_button() == Some(MouseButton::Secondary) {
+        if let Mode::Resize { path, start, moved } = &up_mode {
             mode.set(None);
+            // A click on an edge opens its menu (the way to it without a right button).
+            if !*moved {
+                let mut edge_menu = editor.edge_menu;
+                edge_menu.set(Some(EdgeMenu {
+                    path: path.clone(),
+                    at: *start,
+                }));
+            }
+            return;
+        }
+        // Splits and swaps are picked on release, with a mouse and with a touch alike: a press
+        // that turns into a drag or a scroll picks nothing, so a mistake costs no layout change.
+        if e.trigger_button() == Some(MouseButton::Secondary) {
             return;
         }
         let at = local(&e, x, y);
-        let target = area_at(&down_solved, at);
-        match (&down_mode, target) {
+        let target = area_at(&pick_solved, at);
+        match (&pick_mode, target) {
             (Mode::Split(axis), Some((id, rect))) => {
                 if Workspace::can_split(rect, *axis) {
                     let ratio = match axis {
@@ -231,6 +227,14 @@ fn Capture(mode: Mode, solved: Solved, pointer: Signal<(f32, f32)>, x: f32, y: f
                 mode.set(None);
             }
             _ => {}
+        }
+    };
+
+    // The right button cancels a pick.
+    let on_down = move |e: Event<MouseData>| {
+        if e.trigger_button() == Some(MouseButton::Secondary) {
+            let mut mode = editor.mode;
+            mode.set(None);
         }
     };
 

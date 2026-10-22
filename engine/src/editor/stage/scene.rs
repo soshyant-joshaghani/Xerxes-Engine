@@ -9,7 +9,7 @@ use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
-use super::camera::{ActiveCamera, SceneInput};
+use super::camera::{ActiveCamera, EditorCamera, SceneInput};
 use super::{Picked, Selected, StageObject};
 use crate::editor::view::{SceneView, ViewCamera, ViewLight, ViewMesh, ViewObject};
 use crate::modules::ui::CanvasSurface;
@@ -99,6 +99,24 @@ fn respawn(world: &mut World, view: &SceneView) {
         entities.insert(object.id, entity);
     }
     tag_cameras(world, view);
+    frame_cameras(world, view);
+}
+
+/// Frames every editor camera on the scene just spawned, so it does not load off-screen when
+/// the camera was left somewhere else by the scene before.
+fn frame_cameras(world: &mut World, view: &SceneView) {
+    let points: Vec<Vec3> = view
+        .objects
+        .iter()
+        .map(|object| transform_of(object).translation)
+        .collect();
+    let reference = view.reference();
+    let mut cameras = world.query::<(&mut EditorCamera, &mut Transform, &mut Projection)>();
+    for (mut cam, mut transform, mut projection) in cameras.iter_mut(world) {
+        cam.frame_points(&points, reference);
+        *transform = cam.transform();
+        *projection = cam.projection();
+    }
 }
 
 fn spawn(

@@ -93,6 +93,8 @@ pub fn AppMenuView(menu: AppMenu) -> Element {
     let active = layouts.active;
     let recent: Vec<_> = super::listed(&editor.projects.read())
         .into_iter()
+        .filter(|entry| !entry.packed)
+        .into_iter()
         .take(10)
         .collect();
     let open_project = editor.project.read().as_ref().map(|p| p.id.clone());

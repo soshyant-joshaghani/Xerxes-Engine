@@ -27,8 +27,9 @@ VENDORS = PROJECT / "engine" / "vendors"
 PATCH_FILE = "xerxes.patch"
 
 # What a vendored crate keeps. Everything else upstream ships (examples, tests, docs, changelogs,
-# CI and packaging files) is not built here and only makes the tree harder to read.
-KEEP = ("src", "Cargo.toml", "build.rs", "LICENSE", "LICENSE-APACHE", "LICENSE-MIT", "README.md")
+# CI and packaging files) is not built here and only makes the tree harder to read. `assets` is
+# what `include_str!`/`include_bytes!` read at build time (blitz-dom's default stylesheet and font).
+KEEP = ("src", "assets", "Cargo.toml", "build.rs", "LICENSE", "LICENSE-APACHE", "LICENSE-MIT", "README.md")
 # Ours, never upstream's.
 OURS = ("XERXES.md", PATCH_FILE)
 # Cargo sections a trimmed copy has no use for: their files are gone. Dev-dependencies are only

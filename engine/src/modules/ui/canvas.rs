@@ -170,6 +170,56 @@ pub(super) fn order_overlay(
     }
 }
 
+/// World-space canvases draw only when their UI changed. A canvas's camera is on for a frame when
+/// anything under the canvas changed (or a UI node was removed anywhere), and off otherwise: its
+/// image keeps the last picture, so a static HUD costs nothing per frame.
+pub(super) fn gate_canvas_cameras(
+    changed: Query<
+        Entity,
+        Or<(
+            Changed<Node>,
+            Changed<ComputedNode>,
+            Changed<BackgroundColor>,
+            Changed<BorderColor>,
+            Changed<ImageNode>,
+            Changed<Text>,
+            Changed<TextColor>,
+            Changed<UiTransform>,
+            Changed<Children>,
+            Changed<ChildOf>,
+        )>,
+    >,
+    parents: Query<&ChildOf>,
+    mut removed: RemovedComponents<Node>,
+    surfaces: Query<(Entity, &CanvasSurface)>,
+    mut cameras: Query<&mut Camera>,
+) {
+    let anything_removed = removed.read().next().is_some();
+    // Every ancestor of a changed node is redrawn: the canvas it belongs to is among them.
+    let mut dirty = std::collections::HashSet::new();
+    for node in &changed {
+        let mut at = node;
+        loop {
+            if !dirty.insert(at) {
+                break;
+            }
+            match parents.get(at) {
+                Ok(parent) => at = parent.parent(),
+                Err(_) => break,
+            }
+        }
+    }
+    for (canvas, surface) in &surfaces {
+        let Ok(mut camera) = cameras.get_mut(surface.camera) else {
+            continue;
+        };
+        let draw = anything_removed || dirty.contains(&canvas);
+        if camera.is_active != draw {
+            camera.is_active = draw;
+        }
+    }
+}
+
 /// World-space canvases: a UI camera that renders into an image, and a quad (a 3D mesh, and a
 /// sprite for 2D cameras: each camera kind draws its own) that shows it.
 pub(super) fn build_surface(

@@ -1852,8 +1852,6 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c81d0f520bad6798a54cc4360bcabd245dc0aba2ce5917217d1d82ac5ee6bfed"
 dependencies = [
  "app_units",
  "atomic_refcell",
@@ -3066,8 +3064,6 @@ dependencies = [
 [[package]]
 name = "dioxus-native-dom"
 version = "0.7.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0979a659aca5fe1ed94bc64ffba519b1d7d3d17a80967a4e927fc82a4fe3ba39"
 dependencies = [
  "blitz-dom",
  "blitz-traits",

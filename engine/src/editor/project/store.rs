@@ -36,6 +36,10 @@ pub struct ProjectEntry {
     /// Where it is, for people (`games/x`, or a folder).
     #[serde(default)]
     pub location: String,
+    /// A template game packed into the editor, with no folder of its own to open: a new project
+    /// is made from it, and it is never opened for editing.
+    #[serde(default)]
+    pub packed: bool,
 }
 
 /// A file or folder under a project's `assets/`.
@@ -301,6 +305,7 @@ mod imp {
             name,
             kind: kind.to_string(),
             location,
+            packed: false,
         }
     }
 
@@ -327,7 +332,21 @@ mod imp {
                     .iter()
                     .map(|d| entry(d, "game", d.display().to_string()))
                     .collect(),
-                templates: Vec::new(),
+                // The template games packed into the editor (the first entry is the starter,
+                // which is not a template game).
+                templates: packed()
+                    .iter()
+                    .skip(1)
+                    .map(|(name, files)| ProjectEntry {
+                        id: name.clone(),
+                        name: name.clone(),
+                        title: scaffold::template_title(files).unwrap_or_else(|| name.clone()),
+                        kind: "template".into(),
+                        description: super::text(files, "README.md").and_then(scaffold::readme_summary),
+                        location: format!("packed in the editor: {name}"),
+                        packed: true,
+                    })
+                    .collect(),
                 new_projects_in: dir.display().to_string(),
             },
         })

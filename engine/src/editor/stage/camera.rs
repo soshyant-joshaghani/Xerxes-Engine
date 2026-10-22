@@ -118,6 +118,37 @@ impl EditorCamera {
             };
         }
     }
+
+    /// Frames a freshly shown scene: the pivot at the middle of its `points`, and the distance
+    /// (flat: the zoom) so all of them fit the scene's `reference` size. Never closer than the
+    /// default view, so a small scene is not shown zoomed in. No points: the default view at the
+    /// origin.
+    pub fn frame_points(&mut self, points: &[Vec3], reference: [u32; 2]) {
+        let default = Self::default();
+        let Some((min, max)) = points
+            .iter()
+            .map(|&p| (p, p))
+            .reduce(|(lo, hi), (p, _)| (lo.min(p), hi.max(p)))
+        else {
+            self.pivot = default.pivot;
+            self.distance = default.distance;
+            self.zoom = default.zoom;
+            return;
+        };
+        let centre = (min + max) / 2.0;
+        // At least a unit each way, so a single object still gets a sensible frame.
+        let size = (max - min).max(Vec3::splat(1.0));
+        if self.flat {
+            self.pivot = Vec3::new(centre.x, centre.y, 0.0);
+            let [w, h] = reference.map(|side| side.max(1) as f32);
+            self.zoom = ((size.x / w).max(size.y / h) * 1.2).max(default.zoom);
+        } else {
+            self.pivot = centre;
+            // The sphere around the points, seen through the default perspective field of view.
+            let half_fov = PerspectiveProjection::default().fov / 2.0;
+            self.distance = (size.length() / 2.0 / half_fov.sin() * 1.1).max(default.distance);
+        }
+    }
 }
 
 /// Where the pointer is and what may use it this frame.
@@ -551,5 +582,51 @@ pub fn frame(
         if cam.flat {
             cam.pivot.z = 0.0;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_objects_gives_the_default_view() {
+        let mut cam = EditorCamera {
+            pivot: Vec3::new(40.0, 5.0, 0.0),
+            distance: 90.0,
+            zoom: 3.0,
+            ..default()
+        };
+        cam.frame_points(&[], [1280, 720]);
+        assert_eq!(cam.pivot, Vec3::ZERO);
+        assert_eq!(cam.distance, EditorCamera::default().distance);
+        assert_eq!(cam.zoom, EditorCamera::default().zoom);
+    }
+
+    #[test]
+    fn perspective_pivot_is_the_middle_of_the_points() {
+        let mut cam = EditorCamera::default();
+        cam.frame_points(
+            &[Vec3::new(-10.0, 0.0, 0.0), Vec3::new(30.0, 0.0, 0.0)],
+            [1280, 720],
+        );
+        assert_eq!(cam.pivot, Vec3::new(10.0, 0.0, 0.0));
+        // Far enough that a 40-unit span fits the default field of view.
+        assert!(cam.distance > 20.0, "distance {}", cam.distance);
+    }
+
+    #[test]
+    fn flat_view_fits_the_points_in_the_reference_size() {
+        let mut cam = EditorCamera {
+            flat: true,
+            ..default()
+        };
+        cam.frame_points(
+            &[Vec3::new(0.0, 0.0, 5.0), Vec3::new(1280.0, 720.0, 5.0)],
+            [1280, 720],
+        );
+        assert_eq!(cam.pivot, Vec3::new(640.0, 360.0, 0.0));
+        // The points span the whole reference size, so one pixel is 1 unit (plus a margin).
+        assert!(cam.zoom >= 1.0 && cam.zoom < 1.5, "zoom {}", cam.zoom);
     }
 }

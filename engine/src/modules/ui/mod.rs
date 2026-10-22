@@ -70,6 +70,11 @@ impl Plugin for UiPlugin {
                     canvas::order_overlay,
                 ),
             )
+            // After layout: a world canvas's camera draws only in frames where its UI changed.
+            .add_systems(
+                PostUpdate,
+                canvas::gate_canvas_cameras.after(bevy::ui::UiSystems::Layout),
+            )
             .add_systems(
                 Update,
                 (

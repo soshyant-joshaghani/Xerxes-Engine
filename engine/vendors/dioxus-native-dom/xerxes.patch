@@ -1,0 +1,139 @@
+diff --git a/src/mutation_writer.rs b/src/mutation_writer.rs
+index 104df09..338c49e 100644
+--- a/src/mutation_writer.rs
++++ b/src/mutation_writer.rs
+@@ -97,8 +97,24 @@ impl MutationWriter<'_> {
+     }
+ }
+ 
++impl MutationWriter<'_> {
++    /// Xerxes patch: forgets the element ids of nodes blitz freed since the last mutation. A freed
++    /// id is reused by the next node created, so a kept mapping would point at someone else's node.
++    fn forget_freed(&mut self) {
++        let freed = std::mem::take(&mut self.docm.doc.freed_nodes);
++        for node_id in freed {
++            for slot in self.state.node_id_mapping.iter_mut() {
++                if *slot == Some(node_id) {
++                    *slot = None;
++                }
++            }
++        }
++    }
++}
++
+ impl WriteMutations for MutationWriter<'_> {
+     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
++        self.forget_freed();
+         trace!("assign_node_id path:{:?} id:{}", path, id.0);
+ 
+         // If there is an existing node already mapped to that ID and it has no parent, then drop it
+@@ -108,46 +124,54 @@ impl WriteMutations for MutationWriter<'_> {
+         }
+ 
+         // Map the node at specified path
+-        self.set_id_mapping(self.load_child(path), id);
++        let loaded = self.load_child(path);
++        self.set_id_mapping(loaded, id);
+     }
+ 
+     fn create_placeholder(&mut self, id: ElementId) {
++        self.forget_freed();
+         trace!("create_placeholder id:{}", id.0);
+         let node_id = self.docm.create_comment_node();
+         self.map_new_node(node_id, id);
+     }
+ 
+     fn create_text_node(&mut self, value: &str, id: ElementId) {
++        self.forget_freed();
+         trace!("create_text_node id:{} text:{}", id.0, value);
+         let node_id = self.docm.create_text_node(value);
+         self.map_new_node(node_id, id);
+     }
+ 
+     fn append_children(&mut self, id: ElementId, m: usize) {
++        self.forget_freed();
+         trace!("append_children id:{} m:{}", id.0, m);
+         let (parent_id, child_node_ids) = self.state.anchor_and_nodes(id, m);
+         self.docm.append_children(parent_id, &child_node_ids);
+     }
+ 
+     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
++        self.forget_freed();
+         trace!("insert_nodes_after id:{} m:{}", id.0, m);
+         let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
+         self.docm.insert_nodes_after(anchor_node_id, &new_node_ids);
+     }
+ 
+     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
++        self.forget_freed();
+         trace!("insert_nodes_before id:{} m:{}", id.0, m);
+         let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
+         self.docm.insert_nodes_before(anchor_node_id, &new_node_ids);
+     }
+ 
+     fn replace_node_with(&mut self, id: ElementId, m: usize) {
++        self.forget_freed();
+         trace!("replace_node_with id:{} m:{}", id.0, m);
+         let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
+         self.docm.replace_node_with(anchor_node_id, &new_node_ids);
+     }
+ 
+     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
++        self.forget_freed();
+         trace!("replace_placeholder_with_nodes path:{:?} m:{}", path, m);
+         // WARNING: DO NOT REORDER
+         // The order of the following two lines is very important as "m_stack_nodes" mutates
+@@ -158,18 +182,21 @@ impl WriteMutations for MutationWriter<'_> {
+     }
+ 
+     fn remove_node(&mut self, id: ElementId) {
++        self.forget_freed();
+         trace!("remove_node id:{}", id.0);
+         let node_id = self.state.element_to_node_id(id);
+         self.docm.remove_node(node_id);
+     }
+ 
+     fn push_root(&mut self, id: ElementId) {
++        self.forget_freed();
+         trace!("push_root id:{}", id.0);
+         let node_id = self.state.element_to_node_id(id);
+         self.state.stack.push(node_id);
+     }
+ 
+     fn set_node_text(&mut self, value: &str, id: ElementId) {
++        self.forget_freed();
+         trace!("set_node_text id:{} value:{}", id.0, value);
+         let node_id = self.state.element_to_node_id(id);
+         self.docm.set_node_text(node_id, value);
+@@ -182,6 +209,7 @@ impl WriteMutations for MutationWriter<'_> {
+         value: &AttributeValue,
+         id: ElementId,
+     ) {
++        self.forget_freed();
+         let node_id = self.state.element_to_node_id(id);
+         fn is_falsy(val: &AttributeValue) -> bool {
+             match val {
+@@ -221,6 +249,7 @@ impl WriteMutations for MutationWriter<'_> {
+     }
+ 
+     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
++        self.forget_freed();
+         // TODO: proper template node support
+         let template_entry = self.state.templates.entry(template).or_insert_with(|| {
+             let template_root_ids: Vec<NodeId> = template
+@@ -240,6 +269,7 @@ impl WriteMutations for MutationWriter<'_> {
+     }
+ 
+     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
++        self.forget_freed();
+         // We're going to actually set the listener here as a placeholder - in JS this would also be a placeholder
+         // we might actually just want to attach the attribute to the root element (delegation)
+         let value = AttributeValue::Text("<rust func>".into());
+@@ -258,6 +288,7 @@ impl WriteMutations for MutationWriter<'_> {
+     }
+ 
+     fn remove_event_listener(&mut self, name: &'static str, _id: ElementId) {
++        self.forget_freed();
+         if let Ok(kind) = DomEventKind::from_str(name) {
+             let idx = kind.discriminant() as usize;
+             self.state.event_handler_counts[idx] -= 1;

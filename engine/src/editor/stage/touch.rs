@@ -59,6 +59,12 @@ pub fn touch_as_pointer(
             buttons.press(MouseButton::Left);
         }
     }
+    // On Android the left button is the finger. A press whose release was never seen would
+    // stay down with no finger on the screen, and a gizmo drag would then run on every frame.
+    #[cfg(target_os = "android")]
+    if pointer.primary.is_none() && touches.iter().next().is_none() {
+        buttons.release(MouseButton::Left);
+    }
     let Some(id) = pointer.primary else { return };
     if let Some(touch) = touches.get_pressed(id) {
         pointer.position = Some(touch.position());

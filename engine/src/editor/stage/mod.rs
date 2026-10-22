@@ -342,7 +342,7 @@ fn publish_snapshot(
         ]),
         shift: keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
     };
-    bridge.publish(EditorSnapshot {
+    let next = EditorSnapshot {
         held,
         view_basis,
         rect: gizmo.rect,
@@ -352,5 +352,6 @@ fn publish_snapshot(
         keyed: keyed.0,
         action: shortcuts.fired,
         layout: layout.0,
-    });
+    };
+    bridge.publish(next);
 }

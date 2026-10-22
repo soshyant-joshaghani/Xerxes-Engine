@@ -242,7 +242,8 @@ android = []
 # Profiles apply when the engine app is built from here; games carry their own.
 # Bevy is unusably slow unoptimized: optimize dependencies in dev, keep the engine debuggable.
 [profile.dev]
-opt-level = 1
+# The engine's own code is optimized too: at opt-level 1 the editor ran at about 10 fps on a phone.
+opt-level = 3
 # Line tables only: readable backtraces without multi-GB debug info and PDBs.
 debug = "line-tables-only"
 
@@ -281,3 +282,10 @@ winit = { path = "vendors/winit" }
 # cpal 0.15.3 with one patch: a failed web audio call costs the sound, not the page
 # (engine/vendors/cpal/XERXES.md). Bevy reaches it through bevy_audio -> rodio.
 cpal = { path = "vendors/cpal" }
+# blitz-dom 0.2.4 with two patches: a same-parent move no longer loses its row, and an insert
+# before a desynced node appends instead of panicking (engine/vendors/blitz-dom/XERXES.md).
+# Dioxus's native renderer reaches it.
+blitz-dom = { path = "vendors/blitz-dom" }
+# dioxus-native-dom 0.7.10 with one patch: freed nodes are forgotten from the element map, so a
+# reused node id is never reached through a stale element (engine/vendors/dioxus-native-dom/XERXES.md).
+dioxus-native-dom = { path = "vendors/dioxus-native-dom" }
