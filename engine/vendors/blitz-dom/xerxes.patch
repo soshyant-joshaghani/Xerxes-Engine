@@ -47,6 +47,18 @@ index 53bff74..a9bf010 100644
  
      // Dispatch a click event
      if do_click && event.button == MouseEventButton::Main {
+diff --git a/src/layout/construct.rs b/src/layout/construct.rs
+index a53f467..f5d42e2 100644
+--- a/src/layout/construct.rs
++++ b/src/layout/construct.rs
+@@ -510,7 +510,6 @@ fn collect_complex_layout_children(
+                 if block_is_only_whitespace(doc, anon_id) {
+                     layout_children.pop();
+                     doc.nodes.remove(anon_id);
+-                    *anonymous_block_id = None;
+                 }
+             }
+ 
 diff --git a/src/mutator.rs b/src/mutator.rs
 index fbd9359..0a993d7 100644
 --- a/src/mutator.rs
